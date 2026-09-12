@@ -1,0 +1,305 @@
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+header h1 {
+  font-family: "Press Start 2P", monospace;
+  letter-spacing: 1px;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+header h1 {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.tagline {
+  color: #8b949e;
+  margin-top: 0;
+}
+
+.status-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #30363d;
+  margin-bottom: 8px;
+}
+
+.status-online {
+  color: #3fb950;
+  border-color: #2ea043;
+  background: rgba(63, 185, 80, 0.08);
+}
+
+.status-offline {
+  color: #f85149;
+  border-color: #f85149;
+  background: rgba(248, 81, 73, 0.08);
+}
+
+.status-checking {
+  color: #8b949e;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 10px;
+  margin: 24px 0 16px;
+}
+
+.mode-toggle button {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #c9d1d9;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mode-toggle button.active {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: white;
+}
+
+.code-input {
+  width: 100%;
+  background: #010409;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 14px;
+  font-family: "Fira Code", Consolas, monospace;
+  font-size: 0.9rem;
+  resize: vertical;
+  margin-bottom: 16px;
+}
+
+button.primary {
+  background: #238636;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+button.primary:disabled {
+  background: #30363d;
+  cursor: not-allowed;
+}
+
+button.primary.big {
+  width: 100%;
+  padding: 14px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #3d1a1a;
+  border: 1px solid #f85149;
+  color: #ffb3ac;
+  border-radius: 8px;
+}
+
+.diff-panel,
+.victory-panel,
+.game-panel {
+  margin-top: 24px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.diff-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.diff-header h3 {
+  margin: 0;
+}
+
+.diff-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.diff-header button,
+.diff-actions button {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.diff-header button:hover,
+.diff-actions button:hover {
+  background: #30363d;
+}
+
+.diff-viewer {
+  background: #010409;
+  border-radius: 8px;
+  padding: 10px 0;
+  overflow-x: auto;
+  font-family: "Fira Code", Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.diff-line {
+  display: flex;
+  padding: 1px 14px;
+  white-space: pre;
+}
+
+.diff-marker {
+  width: 18px;
+  flex-shrink: 0;
+  user-select: none;
+  opacity: 0.8;
+}
+
+.diff-text {
+  flex: 1;
+}
+
+.diff-same {
+  color: #8b949e;
+}
+
+.diff-add {
+  background: rgba(63, 185, 80, 0.15);
+  color: #7ee787;
+}
+
+.diff-remove {
+  background: rgba(248, 81, 73, 0.15);
+  color: #ffa198;
+}
+
+.code-block {
+  background: #010409;
+  padding: 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: "Fira Code", Consolas, monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.game-canvas {
+  display: flex;
+  justify-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #30363d;
+}
+
+.hint {
+  text-align: center;
+  color: #8b949e;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+.victory-panel h2 {
+  margin-top: 0;
+  color: #3fb950;
+}
+
+/* Quiz modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 480px;
+  width: 90%;
+}
+
+.modal h3 {
+  margin-top: 0;
+  color: #d29922;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.option {
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: #c9d1d9;
+  cursor: pointer;
+}
+
+.option.selected {
+  border-color: #1f6feb;
+  background: #132339;
+}
+
+.option.correct {
+  border-color: #3fb950;
+  background: #132b1a;
+}
+
+.option.wrong {
+  border-color: #f85149;
+  background: #2b1414;
+}
+
+.feedback {
+  margin-top: 10px;
+}
