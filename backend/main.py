@@ -3,10 +3,9 @@ CodeCrawl backend — FastAPI service.
 
 Endpoints:
   POST /api/analyze   -> AST-based static analysis (complexity, bug hotspots)
-  POST /api/refactor  -> LLM-backed clean code + quiz generation
-                          (falls back to an offline heuristic mock if no
-                          Gemini or Anthropic key is configured, so the app always
-                          runs end-to-end even without a key)
+    POST /api/refactor  -> Qwen2.5-Coder-backed clean code + quiz generation
+                                                    (falls back to an offline heuristic mock if Ollama is
+                                                    unavailable)
 """
 
 import ast
@@ -15,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import asyncio
 from typing import List, Optional
 
 from dotenv import load_dotenv
@@ -24,10 +24,8 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
-MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b-instruct")
 
 app = FastAPI(title="CodeCrawl API", version="1.0.0")
 
@@ -63,6 +61,21 @@ async def broadcast_party(room_code: str, message: dict):
 
 class CodeInput(BaseModel):
     code: str
+
+
+class FixEvaluationInput(BaseModel):
+    buggy_code: str
+    fix_code: str
+
+
+class FixEvaluationResponse(BaseModel):
+    passed: bool
+    feedback: str
+
+
+class HintInput(BaseModel):
+    code: str
+    challenge: str = "debugging challenge"
 
 
 class Quiz(BaseModel):
@@ -316,69 +329,108 @@ def _is_valid_python_source(source: str) -> bool:
         return False
 
 
-def _call_anthropic(code: str) -> Optional[dict]:
-    if not ANTHROPIC_API_KEY:
-        return None
+OLLAMA_EVALUATION_PROMPT = """You are CodeCrawl's code-fix judge. Compare the original buggy Python code with the user's proposed fix.
+Return STRICT JSON ONLY, with exactly this shape:
+{{"passed": true, "feedback": "brief arcade-style evaluation message"}}
 
-    import requests
+Set passed to true only when the fix preserves the program's intended behavior and addresses the bug.
+Set passed to false when it is incomplete, introduces a regression, or is not valid Python.
+Keep feedback under 160 characters. Do not use markdown or surrounding commentary.
 
-    try:
-        resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": MODEL_NAME,
-                "max_tokens": 2000,
-                "system": REFACTOR_SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": code}],
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        text = "".join(block.get("text", "") for block in data.get("content", []))
-        text = re.sub(r"^```(json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
-        return json.loads(text)
-    except Exception:
-        return None
+ORIGINAL BUGGY CODE:
+{buggy_code}
+
+USER FIX:
+{fix_code}"""
 
 
-def _call_gemini(code: str) -> Optional[dict]:
-    if not GEMINI_API_KEY:
-        return None
-
+def _call_ollama_evaluation(buggy_code: str, fix_code: str) -> Optional[dict]:
     import requests
 
     try:
         response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
-            params={"key": GEMINI_API_KEY},
-            headers={"Content-Type": "application/json"},
+            OLLAMA_URL,
             json={
-                "systemInstruction": {"parts": [{"text": REFACTOR_SYSTEM_PROMPT}]},
-                "contents": [{"parts": [{"text": code}]}],
-                "generationConfig": {
-                    "temperature": 0.15,
-                    "responseMimeType": "application/json",
-                },
+                "model": OLLAMA_MODEL,
+                "prompt": OLLAMA_EVALUATION_PROMPT.format(
+                    buggy_code=buggy_code,
+                    fix_code=fix_code,
+                ),
+                "stream": False,
+                "format": "json",
+                "options": {"temperature": 0.1},
             },
-            timeout=30,
+            timeout=90,
         )
         response.raise_for_status()
-        data = response.json()
-        text = "".join(
-            part.get("text", "")
-            for part in data.get("candidates", [])[0].get("content", {}).get("parts", [])
-        )
-        text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
-        return json.loads(text)
-    except (IndexError, json.JSONDecodeError, requests.RequestException, KeyError):
+        raw_text = response.json().get("response", "")
+        raw_text = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+        parsed = json.loads(raw_text)
+        if not isinstance(parsed.get("passed"), bool) or not isinstance(parsed.get("feedback"), str):
+            return None
+        return {"passed": parsed["passed"], "feedback": parsed["feedback"].strip()[:160]}
+    except (requests.RequestException, json.JSONDecodeError, AttributeError, TypeError, KeyError):
         return None
 
+
+def _call_ollama_refactor(code: str) -> Optional[dict]:
+    import requests
+
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": f"{REFACTOR_SYSTEM_PROMPT}\n\nCODE TO REFACTOR:\n{code}",
+                "stream": False,
+                "format": "json",
+                "options": {"temperature": 0.15},
+            },
+            timeout=90,
+        )
+        response.raise_for_status()
+        raw_text = response.json().get("response", "")
+        raw_text = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+        parsed = json.loads(raw_text)
+        return parsed if isinstance(parsed, dict) else None
+    except (requests.RequestException, json.JSONDecodeError, AttributeError, TypeError):
+        return None
+
+
+def _call_ollama_hint(code: str, challenge: str) -> Optional[str]:
+    import requests
+
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": f"Give one concise, targeted debugging hint for this {challenge}. Do not reveal the full fix. Return plain text under 140 characters.\n\nCODE:\n{code}",
+                "stream": False,
+                "options": {"temperature": 0.2},
+            },
+            timeout=90,
+        )
+        response.raise_for_status()
+        return response.json().get("response", "").strip()[:140] or None
+    except (requests.RequestException, AttributeError, TypeError):
+        return None
+
+
+@app.post("/api/evaluate-fix", response_model=FixEvaluationResponse)
+async def evaluate_fix(payload: FixEvaluationInput):
+    result = await asyncio.to_thread(_call_ollama_evaluation, payload.buggy_code, payload.fix_code)
+    if result is None:
+        raise HTTPException(status_code=503, detail="Local Ollama evaluation is unavailable or returned invalid JSON.")
+    return result
+
+
+@app.post("/api/hint")
+async def hint(payload: HintInput):
+    result = await asyncio.to_thread(_call_ollama_hint, payload.code, payload.challenge)
+    if not result:
+        raise HTTPException(status_code=503, detail="Local Qwen hint generation is unavailable.")
+    return {"hint": result}
 
 def _fallback_refactor(code: str) -> dict:
     """Offline mode: no API key configured, or the LLM call failed/timed out.
@@ -448,7 +500,7 @@ def _fallback_refactor(code: str) -> dict:
 
 @app.post("/api/refactor", response_model=RefactorResponse)
 def refactor_code(payload: CodeInput):
-    raw = _call_gemini(payload.code) or _call_anthropic(payload.code)
+    raw = _call_ollama_refactor(payload.code)
     if raw:
         try:
             # Validate the LLM's JSON actually matches our schema before trusting

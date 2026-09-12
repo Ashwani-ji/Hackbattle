@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import CodeCrawlGame from '../components/CodeCrawlGame';
 import CodeEditor from '../components/CodeEditor';
+<<<<<<< HEAD
+=======
+import MultiplayerLobby from '../components/MultiplayerLobby';
+import MultiplayerSidebar from '../components/MultiplayerSidebar';
+import MultiplayerPodium from '../components/MultiplayerPodium';
+import MultiplayerSystems from '../components/MultiplayerSystems';
+import PanicMissionBoard from '../components/PanicSpreadsheet';
+import useMultiplayerRoom from '../lib/useMultiplayerRoom';
+>>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
 
 const starterCode = `def find_total(items):
     total = 0
@@ -33,6 +42,7 @@ export default function HomePage() {
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+<<<<<<< HEAD
   const [playerName, setPlayerName] = useState('Player');
   const [playerStats, setPlayerStats] = useState({ exp: 0, coins: 0 });
   const [roomInput, setRoomInput] = useState('');
@@ -46,6 +56,12 @@ export default function HomePage() {
   const leaderboardEntries = partyState
     ? Object.entries(partyState.players || {}).sort(([, left], [, right]) => right.exp - left.exp)
     : [[playerName, { name: playerName || 'Player', exp: currentPlayerStats.exp, coins: currentPlayerStats.coins }]];
+=======
+  const [playMode, setPlayMode] = useState('solo');
+  const [missionMode, setMissionMode] = useState(false);
+  const multiplayer = useMultiplayerRoom();
+  const multiplayerBaselineRef = useRef(starterCode);
+>>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
 
   useEffect(() => () => partySocket.current?.close(), []);
 
@@ -109,6 +125,13 @@ export default function HomePage() {
     if (partySocket.current?.readyState === WebSocket.OPEN) partySocket.current.send(JSON.stringify({ type: 'answer', question }));
   };
 
+  useEffect(() => {
+    if (playMode === 'multiplayer' && multiplayer.challenge?.code && !arcadeResult) {
+      setCodeInput(multiplayer.challenge.code);
+      multiplayerBaselineRef.current = multiplayer.challenge.code;
+    }
+  }, [playMode, multiplayer.challenge?.code, arcadeResult]);
+
   const importPythonFiles = async (event) => {
     const files = Array.from(event.target.files || []).filter((file) => file.name.toLowerCase().endsWith('.py'));
     if (!files.length) return;
@@ -118,6 +141,7 @@ export default function HomePage() {
       reader.readAsText(file);
     })));
     setCodeInput(contents.join('\n\n'));
+    multiplayerBaselineRef.current = contents.join('\n\n');
     setArcadeResult(null);
     setPanicResult(null);
     event.target.value = '';
@@ -146,6 +170,11 @@ export default function HomePage() {
   const runArcade = async () => {
     setLoading(true);
     setMessage('');
+<<<<<<< HEAD
+=======
+    if (playMode === 'multiplayer' && !arcadeResult) multiplayerBaselineRef.current = codeInput;
+    multiplayer.submitCode(codeInput, multiplayerBaselineRef.current, Boolean(arcadeResult));
+>>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
     try {
       const analyzeResponse = await fetch(`${getApiBaseUrl()}/api/analyze`, {
         method: 'POST',
@@ -198,6 +227,17 @@ export default function HomePage() {
   };
 
   const handleLaunch = async () => {
+<<<<<<< HEAD
+=======
+    if (playMode === 'multiplayer' && multiplayer.status !== 'in-room') {
+      setMessage('Create or join a room before entering the multiplayer dungeon.');
+      return;
+    }
+    if (playMode === 'multiplayer' && multiplayer.matchState === 'draft') {
+      setMessage('The host must start the draft before the dungeon opens.');
+      return;
+    }
+>>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
     await runArcade();
   };
 
@@ -205,6 +245,23 @@ export default function HomePage() {
     setArcadeResult(null);
     setCodeInput('');
     setCoins(0);
+  };
+
+  const playSfx = (enabled) => {
+    if (!enabled || typeof window === 'undefined') return;
+    const context = new window.AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 220;
+    gain.gain.value = 0.025;
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.08);
+  };
+
+  const handleCodeChange = (value) => {
+    setCodeInput(value);
+    if (playMode === 'multiplayer' && multiplayer.roomCode && !multiplayer.isSpectator) multiplayer.syncEditor(value, 0);
   };
 
   return (
@@ -229,6 +286,17 @@ export default function HomePage() {
       </header>
 
       {message ? <div className="status-banner">{message}</div> : null}
+      {playMode === 'multiplayer' ? (
+        <MultiplayerSystems
+          room={multiplayer}
+          onRanked={(username) => multiplayer.joinRanked(username, 1000)}
+          onSpectate={multiplayer.spectateRoom}
+          onModifier={multiplayer.useModifier}
+          onHint={multiplayer.requestHint}
+          onProfile={multiplayer.loadProfile}
+          onSoundToggle={playSfx}
+        />
+      ) : null}
 
       {showLeaderboard ? (
         <section className="panel leaderboard-view-panel">
@@ -256,6 +324,7 @@ export default function HomePage() {
         <section className="panel panic-panel">
           <div className="debug-toolbar">
             <span className="debug-label">Python debugger</span>
+            <button className="normal-mode-button" onClick={() => setMissionMode((visible) => !visible)}>{missionMode ? 'Debugger' : 'Mission'}</button>
             <label className="import-button" title="Import Python files">
               <span aria-hidden="true">＋</span> Python files
               <input type="file" accept=".py" multiple onChange={importPythonFiles} />
@@ -276,12 +345,13 @@ export default function HomePage() {
               {loading ? 'Running...' : 'Run file'}
             </button>
           </div>
-          <CodeEditor
+          {missionMode ? <PanicMissionBoard /> : null}
+          {!missionMode ? <CodeEditor
             value={codeInput}
             onChange={(event) => updateSharedCode(event.target.value)}
             placeholder="Paste broken Python code here"
             ariaLabel="Paste broken Python code here"
-          />
+          /> : null}
           <div className="panel-actions">
             <button onClick={handlePanicSubmit} disabled={loading}>
               {loading ? 'Fixing...' : 'Execute Emergency Fix'}
@@ -369,6 +439,7 @@ export default function HomePage() {
           <div className="reference-stage">
             {arcadeResult ? (
               <section className="game-workspace reference-game">
+<<<<<<< HEAD
                 <CodeCrawlGame
                   metrics={{
                     complexity_score: arcadeResult.complexity_score,
@@ -386,6 +457,46 @@ export default function HomePage() {
                   setCoins={setCoins}
                   onQuit={handleQuitArcade}
                 />
+=======
+                <div className={playMode === 'multiplayer' ? 'multiplayer-session-layout' : ''}>
+                  <CodeCrawlGame
+                    metrics={{
+                      complexity_score: arcadeResult.complexity_score,
+                      bug_count: arcadeResult.bug_count,
+                    }}
+                    quizzes={arcadeResult.quizzes || []}
+                    cleanCode={arcadeResult.clean_code || ''}
+                    codeInput={codeInput}
+                    onCodeChange={handleCodeChange}
+                    onAnalyze={handleLaunch}
+                    loading={loading}
+                    onModeChange={setIsArcadeMode}
+                    coins={coins}
+                    setCoins={setCoins}
+                    onQuit={handleQuitArcade}
+                    onMultiplayerProgress={playMode === 'multiplayer' ? multiplayer.reportProgress : undefined}
+                    submissionsLocked={playMode === 'multiplayer' && multiplayer.matchState === 'complete'}
+                  />
+                  {playMode === 'multiplayer' ? (
+                    <MultiplayerSidebar
+                      players={multiplayer.players.map((player) => ({ ...player, isYou: player.id === multiplayer.playerId }))}
+                      roomCode={multiplayer.roomCode}
+                      matchState={multiplayer.matchState}
+                      remainingSeconds={multiplayer.remainingSeconds}
+                      challenge={multiplayer.challenge}
+                      onLeave={handleQuitArcade}
+                    />
+                  ) : null}
+                  {playMode === 'multiplayer' && multiplayer.matchState === 'complete' ? (
+                    <MultiplayerPodium
+                      players={multiplayer.players}
+                      winner={multiplayer.winner}
+                      remainingSeconds={multiplayer.remainingSeconds}
+                      onLeave={handleQuitArcade}
+                    />
+                  ) : null}
+                </div>
+>>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
               </section>
             ) : (
               <section className="launch-stage">
@@ -404,10 +515,20 @@ export default function HomePage() {
                 </div>
                   <CodeEditor
                   value={codeInput}
-                  onChange={(event) => setCodeInput(event.target.value)}
+                  onChange={(event) => handleCodeChange(event.target.value)}
                   placeholder="Paste buggy Python for the dungeon run"
                     ariaLabel="Paste buggy Python for the dungeon run"
                 />
+<<<<<<< HEAD
+=======
+                  <div className="play-mode-switch" role="tablist" aria-label="Play mode">
+                    <button className={playMode === 'solo' ? 'selected' : ''} onClick={() => setPlayMode('solo')} role="tab" aria-selected={playMode === 'solo'}>Solo Arcade</button>
+                    <button className={playMode === 'multiplayer' ? 'selected' : ''} onClick={() => setPlayMode('multiplayer')} role="tab" aria-selected={playMode === 'multiplayer'}>Multiplayer Battle</button>
+                  </div>
+                  {playMode === 'multiplayer' ? (
+                    <MultiplayerLobby room={multiplayer} onCreate={multiplayer.createRoom} onJoin={multiplayer.joinRoom} onStartMatch={multiplayer.startMatch} />
+                  ) : null}
+>>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
                 <button onClick={handleLaunch} disabled={loading}>
                   {loading ? 'Analyzing...' : 'Start debugging lesson'}
                 </button>

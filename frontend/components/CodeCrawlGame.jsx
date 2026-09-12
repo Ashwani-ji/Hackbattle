@@ -7,7 +7,11 @@ import CodeEditor from './CodeEditor';
 const createMobHealth = (count) =>
   Array.from({ length: count }, () => Math.floor(Math.random() * 3) + 1);
 
+<<<<<<< HEAD
 export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, onCodeChange, onAnalyze, loading, onModeChange, coins, setCoins, onQuit, onPartyAnswer }) {
+=======
+export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, onCodeChange, onAnalyze, loading, onModeChange, coins, setCoins, onQuit, onMultiplayerProgress, submissionsLocked = false }) {
+>>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
   const [quizIndex, setQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isComplete, setIsComplete] = useState(false);
@@ -89,7 +93,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, 
   };
 
   const handleAnswer = (answerIndex, clickedMob = false) => {
-    if (isKilling || isPaused) return;
+    if (isKilling || isPaused || submissionsLocked) return;
     setSelectedAnswer(answerIndex);
     const currentQuiz = quizzes[quizIndex];
     if (!currentQuiz) {
@@ -176,7 +180,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, 
   };
 
   const handleMobClick = () => {
-    if (currentQuiz && !isKilling && !isPaused && selectedAnswer === null) {
+    if (currentQuiz && !isKilling && !isPaused && !submissionsLocked && selectedAnswer === null) {
       handleAnswer(currentQuiz.answer, true);
     }
   };
@@ -248,7 +252,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, 
             compact
             editorRef={codeEditorRef}
           />
-          <button onClick={handleCodeRun} disabled={loading}>
+          <button onClick={handleCodeRun} disabled={loading || submissionsLocked}>
             {loading ? 'Analyzing...' : 'Analyze code'}
           </button>
         </div>
@@ -309,7 +313,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, 
                 key={option}
                 className={selectedAnswer === index ? 'answer-button selected' : 'answer-button'}
                 onClick={() => handleAnswer(index)}
-                disabled={selectedAnswer !== null || isKilling}
+                disabled={selectedAnswer !== null || isKilling || submissionsLocked}
               >
                 {option}
               </button>
