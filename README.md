@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CodeCrawl
 
 Panic Mode for emergencies. Arcade Mode for learning. Paste messy/buggy code in,
@@ -116,3 +117,6 @@ instead of failing silently:
   refactoring requires a configured `ANTHROPIC_API_KEY`.
 - CORS is wide open (`allow_origins=["*"]`) for local development; tighten
   this before deploying anywhere public.
+=======
+# Hackbattle
+>>>>>>> 9283d881f240ecf35baa56c98fe329d38f4e0da8
