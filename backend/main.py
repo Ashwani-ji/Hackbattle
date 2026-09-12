@@ -5,7 +5,7 @@ Endpoints:
   POST /api/analyze   -> AST-based static analysis (complexity, bug hotspots)
   POST /api/refactor  -> LLM-backed clean code + quiz generation
                           (falls back to an offline heuristic mock if no
-                          ANTHROPIC_API_KEY is configured, so the app always
+                          Gemini or Anthropic key is configured, so the app always
                           runs end-to-end even without a key)
 """
 
@@ -26,6 +26,8 @@ load_dotenv()
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 app = FastAPI(title="CodeCrawl API", version="1.0.0")
 
@@ -133,10 +135,34 @@ def _detect_bug_hotspots(tree):
     return hotspots
 
 
+def _detect_text_hotspots(code: str):
+    """Find common line-level mistakes even when the file does not parse."""
+    hotspots = []
+    for line_number, source in enumerate(code.splitlines(), start=1):
+        line = source.strip()
+        if not line or line.startswith("#"):
+            continue
+        if re.search(r"^(def\b|(?:if|elif|else|for|while|try|except|with)\b)", line) and not line.endswith(":"):
+            hotspots.append((line_number, "Python block statements must end with a colon."))
+        if re.search(r"\+\+|--", line):
+            hotspots.append((line_number, "Python does not use ++ or -- for assignment."))
+        if re.search(r"range\(\s*len\([^)]*\)\s*\+\s*1\s*\)", line):
+            hotspots.append((line_number, "The extra range step can access one item past the end of the list."))
+        if "open(" in line and "with open(" not in line:
+            hotspots.append((line_number, "Open files with a context manager so they are closed reliably."))
+        if re.search(r"\b(print|return)\s*\([^)]*(?:final_message|result_str)[^)]*\)", line):
+            hotspots.append((line_number, "Verify that the variable used here is defined and matches the value built above."))
+
+    seen = {}
+    for line, reason in hotspots:
+        seen.setdefault(line, reason)
+    return list(seen.items())
+
+
 def _build_relevant_quizzes(code: str, hotspots) -> List[dict]:
     lines = code.splitlines()
     quizzes = []
-    for line, reason in hotspots[:6]:
+    for line, reason in hotspots[:12]:
         snippet = lines[line - 1].strip() if 0 < line <= len(lines) else ""
         if "++" in snippet:
             question = f"Line {line} uses `{snippet}`. Which Python operator should add the item to the running total?"
@@ -205,18 +231,26 @@ def _build_relevant_quizzes(code: str, hotspots) -> List[dict]:
 
 @app.post("/api/analyze")
 def analyze_code(payload: CodeInput):
+    syntax_error = None
     try:
         tree = ast.parse(payload.code)
     except SyntaxError as e:
-        raise HTTPException(status_code=400, detail=f"SyntaxError: {e}")
+        tree = None
+        syntax_error = e
 
     source_lines = payload.code.splitlines()
-    loops = _count_nodes(tree, (ast.For, ast.While))
-    functions = _count_nodes(tree, (ast.FunctionDef, ast.AsyncFunctionDef))
-    branches = _count_nodes(tree, (ast.If,))
+    loops = _count_nodes(tree, (ast.For, ast.While)) if tree else 0
+    functions = _count_nodes(tree, (ast.FunctionDef, ast.AsyncFunctionDef)) if tree else 0
+    branches = _count_nodes(tree, (ast.If,)) if tree else 0
     total_lines = len([l for l in source_lines if l.strip()])
 
-    hotspots = _detect_bug_hotspots(tree)
+    hotspots = _detect_bug_hotspots(tree) if tree else []
+    if syntax_error:
+        hotspots.insert(0, (syntax_error.lineno or 1, f"Syntax error: {syntax_error.msg}."))
+    hotspots.extend(_detect_text_hotspots(payload.code))
+    hotspots = list({line: reason for line, reason in hotspots}.items())
+    if not hotspots:
+        hotspots = [(1, "Trace the input, transformation, and output before changing code.")]
     bug_count = len(hotspots)
 
     # Complexity score: weighted structural heuristic that drives game difficulty
@@ -252,9 +286,18 @@ code, respond with STRICT JSON ONLY — no markdown fences, no commentary — ma
   ]
 }
 
-Generate one quiz question per real bug you find (at least 1, at most 6). Keep questions concise, \
-options plausible, and exactly one option correct. Return valid JSON parseable by json.loads with \
-no surrounding text."""
+Generate one quiz question per real bug you find (at least 1, at most 12). Keep questions concise, \
+options plausible, and exactly one option correct. Preserve the original program's purpose, inputs, \
+outputs, function names, and control flow while fixing every issue you identify. Return valid JSON \
+parseable by json.loads with no surrounding text."""
+
+
+def _is_valid_python_source(source: str) -> bool:
+    try:
+        ast.parse(source)
+        return True
+    except SyntaxError:
+        return False
 
 
 def _call_anthropic(code: str) -> Optional[dict]:
@@ -288,6 +331,39 @@ def _call_anthropic(code: str) -> Optional[dict]:
         return None
 
 
+def _call_gemini(code: str) -> Optional[dict]:
+    if not GEMINI_API_KEY:
+        return None
+
+    import requests
+
+    try:
+        response = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+            params={"key": GEMINI_API_KEY},
+            headers={"Content-Type": "application/json"},
+            json={
+                "systemInstruction": {"parts": [{"text": REFACTOR_SYSTEM_PROMPT}]},
+                "contents": [{"parts": [{"text": code}]}],
+                "generationConfig": {
+                    "temperature": 0.15,
+                    "responseMimeType": "application/json",
+                },
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = "".join(
+            part.get("text", "")
+            for part in data.get("candidates", [])[0].get("content", {}).get("parts", [])
+        )
+        text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
+        return json.loads(text)
+    except (IndexError, json.JSONDecodeError, requests.RequestException, KeyError):
+        return None
+
+
 def _fallback_refactor(code: str) -> dict:
     """Offline mode: no API key configured, or the LLM call failed/timed out.
     Produces a deterministic result so the app is always fully demoable."""
@@ -297,14 +373,42 @@ def _fallback_refactor(code: str) -> dict:
         code,
         flags=re.MULTILINE,
     )
+    repaired_code = re.sub(
+        r"range\(\s*len\(([^)]+)\)\s*\+\s*1\s*\)",
+        r"range(len(\1))",
+        repaired_code,
+    )
+    if "result_str" in repaired_code and re.search(r"\bprint\(\s*final_message\s*\)", repaired_code):
+        repaired_code = re.sub(r"\bprint\(\s*final_message\s*\)", "print(result_str)", repaired_code)
+    repaired_code = re.sub(
+        r"(\baverage\s*=\s*[^\n]*?/\s*count)\s*$",
+        r"\1 if count else 0",
+        repaired_code,
+        flags=re.MULTILINE,
+    )
+    repaired_code = re.sub(
+        r"^(\s*)(def\s+\w+\([^\n]*\)|(?:for|if|while|with|try|else|elif|except)\b[^:\n]*)(?<!:)\s*$",
+        r"\1\2:",
+        repaired_code,
+        flags=re.MULTILINE,
+    )
 
     try:
         tree = ast.parse(code)
         hotspots = _detect_bug_hotspots(tree)
     except SyntaxError:
-        hotspots = [(1, "Fix the syntax error before continuing.")]
+        hotspots = []
+
+    text_hotspots = _detect_text_hotspots(code)
+    hotspots = list({line: reason for line, reason in hotspots + text_hotspots}.items())
+    if not hotspots:
+        hotspots = [(1, "Trace the input, transformation, and output before changing code.")]
 
     if repaired_code != code:
+        hotspots = [
+            hotspot for hotspot in hotspots
+            if not hotspot[1].startswith("Review this block")
+        ]
         repaired_line = next(
             index
             for index, (before, after) in enumerate(
@@ -317,30 +421,26 @@ def _fallback_refactor(code: str) -> dict:
             (repaired_line, "Use += for addition assignment; ++ is not a Python increment operator."),
         )
 
+    hotspots = list({line: reason for line, reason in hotspots}.items())
+
     quizzes = _build_relevant_quizzes(code, hotspots)
 
-    clean_code = (
-        "# --- CodeCrawl offline mode: no ANTHROPIC_API_KEY configured ---\n"
-        "# Add your key to backend/.env for real AI-generated refactors.\n\n" + repaired_code
-    )
+    clean_code = repaired_code
 
     return {"clean_code": clean_code, "quizzes": quizzes}
 
 
 @app.post("/api/refactor", response_model=RefactorResponse)
 def refactor_code(payload: CodeInput):
-    try:
-        ast.parse(payload.code)  # validate early so we can give a clear error
-    except SyntaxError as e:
-        raise HTTPException(status_code=400, detail=f"SyntaxError: {e}")
-
-    raw = _call_anthropic(payload.code)
+    raw = _call_gemini(payload.code) or _call_anthropic(payload.code)
     if raw:
         try:
             # Validate the LLM's JSON actually matches our schema before trusting
             # it — malformed output (wrong types, missing fields) falls back to
             # the offline heuristic instead of surfacing a 500 to the user.
-            return RefactorResponse(**raw)
+            response = RefactorResponse(**raw)
+            if _is_valid_python_source(response.clean_code):
+                return response
         except Exception:
             pass
 

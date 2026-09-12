@@ -507,6 +507,27 @@ function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed
   context.fillStyle = '#5b4033';
   context.fillRect(x - 18, y + 78, 12, 11);
   context.fillRect(x + 7, y + 78, 12, 11);
+  if (index % 4 === 2) {
+    context.fillStyle = '#281d38';
+    context.fillRect(x - 28, y + 20, 56, 45);
+    context.fillRect(x - 21, y + 12, 42, 55);
+    context.fillStyle = '#673d86';
+    context.fillRect(x - 24, y + 25, 48, 34);
+    context.fillRect(x - 17, y + 17, 34, 42);
+    context.fillStyle = '#c675d7';
+    context.fillRect(x - 29, y + 38, 8, 19);
+    context.fillRect(x + 21, y + 38, 8, 19);
+    context.fillStyle = '#f3a24c';
+    context.fillRect(x - 20, y + 10, 8, 13);
+    context.fillRect(x + 12, y + 10, 8, 13);
+    context.fillStyle = '#ffe98c';
+    context.fillRect(x - 12, y + 32, 7, 6);
+    context.fillRect(x + 6, y + 32, 7, 6);
+    context.fillStyle = '#16101e';
+    context.fillRect(x - 10, y + 49, 20, 5);
+    context.fillRect(x - 6, y + 54, 4, 5);
+    context.fillRect(x + 2, y + 54, 4, 5);
+  }
   if (dying && elapsed >= 1850 && elapsed < 1970) {
     context.globalCompositeOperation = 'source-atop';
     context.fillStyle = '#ffffff';
@@ -729,7 +750,7 @@ function drawScene(context, width, height, enemies, killedEnemies, dyingEnemies,
   context.fillRect(0, 0, width, height);
 }
 
-export default function DungeonCanvas({ enemies, killedEnemies, dyingEnemies, isKilling, targetIndex, attackNonce, attackStartedAt }) {
+export default function DungeonCanvas({ enemies, killedEnemies, dyingEnemies, isKilling, targetIndex, attackNonce, attackStartedAt, onMobClick }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef({ enemies, killedEnemies, dyingEnemies, isKilling, targetIndex, attackNonce, attackStartedAt });
   const attackRef = useRef({ nonce: 0, weapon: 'sword' });
@@ -744,7 +765,7 @@ export default function DungeonCanvas({ enemies, killedEnemies, dyingEnemies, is
 
     const render = (now) => {
       const width = parent.clientWidth;
-      const height = 300;
+      const height = window.innerWidth <= 560 ? 260 : 280;
       const ratio = window.devicePixelRatio || 1;
       canvas.width = width * ratio;
       canvas.height = height * ratio;
@@ -781,5 +802,22 @@ export default function DungeonCanvas({ enemies, killedEnemies, dyingEnemies, is
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  return <canvas ref={canvasRef} className="dungeon-canvas" aria-label="Pixel dungeon combat arena" />;
+  const handleCanvasClick = (event) => {
+    if (!onMobClick || isKilling) return;
+    const canvas = canvasRef.current;
+    const bounds = canvas.getBoundingClientRect();
+    const width = canvas.clientWidth;
+    const clickX = ((event.clientX - bounds.left) / bounds.width) * width;
+    const spacing = Math.max(62, Math.floor((width * 0.62) / Math.max(1, enemies.length - 1)));
+    const firstMobX = width * 0.3;
+    const clickedIndex = Math.round((clickX - firstMobX) / spacing);
+    if (clickedIndex >= 0 && clickedIndex < enemies.length) {
+      const mobX = firstMobX + clickedIndex * spacing;
+      if (Math.abs(clickX - mobX) < 34 && !killedEnemies.includes(clickedIndex)) {
+        onMobClick(clickedIndex);
+      }
+    }
+  };
+
+  return <canvas ref={canvasRef} onClick={handleCanvasClick} className="dungeon-canvas" aria-label="Pixel dungeon combat arena" />;
 }

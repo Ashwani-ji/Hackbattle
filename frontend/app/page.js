@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import CodeCrawlGame from '../components/CodeCrawlGame';
+import CodeEditor from '../components/CodeEditor';
 
 const starterCode = `def find_total(items):
     total = 0
@@ -20,6 +21,20 @@ export default function HomePage() {
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+
+  const importPythonFiles = async (event) => {
+    const files = Array.from(event.target.files || []).filter((file) => file.name.toLowerCase().endsWith('.py'));
+    if (!files.length) return;
+    const contents = await Promise.all(files.map((file) => new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(`# ${file.webkitRelativePath || file.name}\n${reader.result}`);
+      reader.readAsText(file);
+    })));
+    setCodeInput(contents.join('\n\n'));
+    setArcadeResult(null);
+    setPanicResult(null);
+    event.target.value = '';
+  };
 
   const runRefactor = async () => {
     setLoading(true);
@@ -72,6 +87,7 @@ export default function HomePage() {
   };
 
   const handlePanicSubmit = async () => {
+    setDebugResult(null);
     await runRefactor();
   };
 
@@ -111,20 +127,15 @@ export default function HomePage() {
           <p className="eyebrow">Bug-fixing arcade</p>
           <h1>CodeCrawl</h1>
         </div>
-        <div className="mode-toggle" aria-label="Mode switcher">
-          <button
-            className={isArcadeMode ? 'mode-button active' : 'mode-button'}
-            onClick={() => setIsArcadeMode(true)}
-          >
-            Arcade mode
+        <div className="brand-sigil" aria-hidden="true">✣</div>
+        <nav className="quick-nav" aria-label="Mode navigation">
+          <button className={isArcadeMode ? 'quick-nav-button active' : 'quick-nav-button'} onClick={() => setIsArcadeMode(true)} title="Arcade mode">
+            ⚔ <span>Arcade</span>
           </button>
-          <button
-            className={!isArcadeMode ? 'mode-button active' : 'mode-button'}
-            onClick={() => setIsArcadeMode(false)}
-          >
-            Panic mode
+          <button className={!isArcadeMode ? 'quick-nav-button active danger' : 'quick-nav-button danger'} onClick={() => setIsArcadeMode(false)} title="Panic mode">
+            ⚠ <span>Panic</span>
           </button>
-        </div>
+        </nav>
       </header>
 
       {message ? <div className="status-banner">{message}</div> : null}
@@ -133,15 +144,31 @@ export default function HomePage() {
         <section className="panel panic-panel">
           <div className="debug-toolbar">
             <span className="debug-label">Python debugger</span>
+            <label className="import-button" title="Import Python files">
+              <span aria-hidden="true">＋</span> Python files
+              <input type="file" accept=".py" multiple onChange={importPythonFiles} />
+            </label>
+            <label className="import-button" title="Import a Python project folder">
+              <span aria-hidden="true">▦</span> Project
+              <input type="file" accept=".py" multiple webkitdirectory="" directory="" onChange={importPythonFiles} />
+            </label>
+            <button
+              className="normal-mode-button"
+              onClick={() => setIsArcadeMode(true)}
+              aria-label="Return to Arcade mode"
+              title="Return to Arcade mode"
+            >
+              ↩ <span>Arcade</span>
+            </button>
             <button className="debug-run-button" onClick={handleDebug} disabled={loading}>
               {loading ? 'Running...' : 'Run file'}
             </button>
           </div>
-          <textarea
+          <CodeEditor
             value={codeInput}
             onChange={(event) => setCodeInput(event.target.value)}
-            rows={16}
             placeholder="Paste broken Python code here"
+            ariaLabel="Paste broken Python code here"
           />
           <div className="panel-actions">
             <button onClick={handlePanicSubmit} disabled={loading}>
@@ -178,30 +205,9 @@ export default function HomePage() {
         </section>
       ) : (
         <section className="panel arcade-panel">
-          <div className="debug-layout">
-            <section className="code-workspace">
-              <div className="workspace-heading">
-                <div>
-                  <p className="eyebrow">Debug workspace</p>
-                  <h2>Code under investigation</h2>
-                </div>
-                <span className="workspace-tag">Python</span>
-              </div>
-              <textarea
-                value={codeInput}
-                onChange={(event) => setCodeInput(event.target.value)}
-                rows={16}
-                placeholder="Paste buggy Python for the dungeon run"
-              />
-              <div className="panel-actions">
-                <button onClick={handleLaunch} disabled={loading}>
-                  {loading ? 'Analyzing...' : arcadeResult ? 'Re-analyze code' : 'Start debugging lesson'}
-                </button>
-              </div>
-            </section>
-
+          <div className="reference-stage">
             {arcadeResult ? (
-              <section className="game-workspace">
+              <section className="game-workspace reference-game">
                 <CodeCrawlGame
                   metrics={{
                     complexity_score: arcadeResult.complexity_score,
@@ -209,12 +215,42 @@ export default function HomePage() {
                   }}
                   quizzes={arcadeResult.quizzes || []}
                   cleanCode={arcadeResult.clean_code || ''}
+                  codeInput={codeInput}
+                  onCodeChange={setCodeInput}
+                  onAnalyze={handleLaunch}
+                  loading={loading}
+                  onModeChange={setIsArcadeMode}
                   coins={coins}
                   setCoins={setCoins}
                   onQuit={handleQuitArcade}
                 />
               </section>
-            ) : null}
+            ) : (
+              <section className="launch-stage">
+                <p className="eyebrow">Arcade run</p>
+                <h2>Enter the dungeon</h2>
+                <p>Load your Python code to reveal the debugging arena.</p>
+                <div className="import-actions">
+                  <label className="import-button">
+                    <span aria-hidden="true">＋</span> Add Python files
+                    <input type="file" accept=".py" multiple onChange={importPythonFiles} />
+                  </label>
+                  <label className="import-button">
+                    <span aria-hidden="true">▦</span> Add project folder
+                    <input type="file" accept=".py" multiple webkitdirectory="" directory="" onChange={importPythonFiles} />
+                  </label>
+                </div>
+                  <CodeEditor
+                  value={codeInput}
+                  onChange={(event) => setCodeInput(event.target.value)}
+                  placeholder="Paste buggy Python for the dungeon run"
+                    ariaLabel="Paste buggy Python for the dungeon run"
+                />
+                <button onClick={handleLaunch} disabled={loading}>
+                  {loading ? 'Analyzing...' : 'Start debugging lesson'}
+                </button>
+              </section>
+            )}
           </div>
         </section>
       )}

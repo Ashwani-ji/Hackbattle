@@ -1,26 +1,30 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DungeonCanvas from './DungeonCanvas';
+import CodeEditor from './CodeEditor';
 
 const createMobHealth = (count) =>
   Array.from({ length: count }, () => Math.floor(Math.random() * 3) + 1);
 
-export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setCoins, onQuit }) {
+export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, onCodeChange, onAnalyze, loading, onModeChange, coins, setCoins, onQuit }) {
   const [quizIndex, setQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isComplete, setIsComplete] = useState(false);
   const [killedEnemies, setKilledEnemies] = useState([]);
   const [isKilling, setIsKilling] = useState(false);
-  const [enemyCount, setEnemyCount] = useState(() => 5 + Math.floor(Math.random() * 2));
+  const [enemyCount, setEnemyCount] = useState(() => Math.max(1, quizzes?.length || 1));
   const [enemyHealth, setEnemyHealth] = useState([]);
   const [dyingEnemies, setDyingEnemies] = useState([]);
   const [killCombo, setKillCombo] = useState(0);
+  const [correctedArea, setCorrectedArea] = useState('');
+  const [isLogOpen, setIsLogOpen] = useState(false);
   const [combo, setCombo] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [isPaused, setIsPaused] = useState(false);
   const [attackNonce, setAttackNonce] = useState(0);
   const [attackStartedAt, setAttackStartedAt] = useState(0);
+  const codeEditorRef = useRef(null);
 
   const enemies = useMemo(
     () => Array.from({ length: enemyCount }, (_, index) => ({
@@ -37,11 +41,13 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     setIsComplete(false);
     setKilledEnemies([]);
     setIsKilling(false);
-    const mobCount = 5 + Math.floor(Math.random() * 2);
+    const mobCount = Math.max(1, quizzes?.length || 1);
     setEnemyCount(mobCount);
     setEnemyHealth(createMobHealth(mobCount));
     setDyingEnemies([]);
     setKillCombo(0);
+    setCorrectedArea('');
+    setIsLogOpen(false);
     setCombo(0);
     setFeedback('');
     setIsPaused(false);
@@ -55,11 +61,13 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     setIsComplete(false);
     setKilledEnemies([]);
     setIsKilling(false);
-    const mobCount = 5 + Math.floor(Math.random() * 2);
+    const mobCount = Math.max(1, quizzes?.length || 1);
     setEnemyCount(mobCount);
     setEnemyHealth(createMobHealth(mobCount));
     setDyingEnemies([]);
     setKillCombo(0);
+    setCorrectedArea('');
+    setIsLogOpen(false);
     setCombo(0);
     setFeedback('');
     setCoins(0);
@@ -72,7 +80,15 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     onQuit();
   };
 
-  const handleAnswer = (answerIndex) => {
+  const revealCorrectedArea = (quiz) => {
+    const allLines = cleanCode.split('\n');
+    const codeStart = allLines.findIndex((line) => /^\s*(def|class|import|from)\b/.test(line));
+    const lines = codeStart >= 0 ? allLines.slice(codeStart) : allLines;
+    const lineIndex = Math.max(0, Math.min(lines.length - 1, (quiz?.bug_line || 1) - 1));
+    setCorrectedArea(lines.slice(Math.max(0, lineIndex - 1), lineIndex + 2).join('\n'));
+  };
+
+  const handleAnswer = (answerIndex, clickedMob = false) => {
     if (isKilling || isPaused) return;
     setSelectedAnswer(answerIndex);
     const currentQuiz = quizzes[quizIndex];
@@ -84,19 +100,20 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     const isCorrect = answerIndex === currentQuiz.answer;
     if (!isCorrect) {
       setCombo(0);
-      setEnemyCount((count) => count + 1);
-      setEnemyHealth((health) => [...health, Math.floor(Math.random() * 3) + 1]);
       setFeedback(`Wrong answer. Hint: ${currentQuiz.hint || `Inspect line ${currentQuiz.bug_line} and trace what it changes.`}`);
       setTimeout(() => setSelectedAnswer(null), 500);
       return;
     }
 
+    revealCorrectedArea(currentQuiz);
     const nextCombo = combo + 1;
     setCombo(nextCombo);
     const coinRoll = Math.random();
     const reward = coinRoll < 0.45 ? 1 : coinRoll < 0.72 ? 2 : coinRoll < 0.88 ? 3 : coinRoll < 0.97 ? 4 : 5;
     setCoins((total) => total + reward);
-    setFeedback(nextCombo > 1 ? `${nextCombo}x combo! +${reward} coin${reward === 1 ? '' : 's'}` : `Correct. +${reward} coin${reward === 1 ? '' : 's'}`);
+    setFeedback(clickedMob
+      ? `Target clicked. Correct answer revealed. +${reward} coin${reward === 1 ? '' : 's'}`
+      : nextCombo > 1 ? `${nextCombo}x combo! +${reward} coin${reward === 1 ? '' : 's'}` : `Correct. +${reward} coin${reward === 1 ? '' : 's'}`);
     setAttackNonce((nonce) => nonce + 1);
     setAttackStartedAt(Date.now());
     setIsKilling(true);
@@ -142,6 +159,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
           setIsComplete(true);
           setIsKilling(false);
           setDyingEnemies([]);
+          advanceCodeWindow();
           return;
         }
 
@@ -149,9 +167,29 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
         setSelectedAnswer(null);
         setIsKilling(false);
         setDyingEnemies([]);
+        setCorrectedArea('');
         setFeedback('');
+        advanceCodeWindow();
       }, 1100);
     }, 2300);
+  };
+
+  const handleMobClick = () => {
+    if (currentQuiz && !isKilling && !isPaused && selectedAnswer === null) {
+      handleAnswer(currentQuiz.answer, true);
+    }
+  };
+
+  const handleCodeRun = async () => {
+    await onAnalyze();
+    advanceCodeWindow();
+  };
+
+  const advanceCodeWindow = () => {
+    requestAnimationFrame(() => {
+      const editor = codeEditorRef.current;
+      if (editor) editor.scrollTo({ top: Math.min(editor.scrollHeight, editor.scrollTop + editor.clientHeight * 0.85), behavior: 'smooth' });
+    });
   };
 
   const currentQuiz = quizzes[quizIndex];
@@ -178,10 +216,8 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
           targetIndex={quizIndex}
           attackNonce={attackNonce}
           attackStartedAt={attackStartedAt}
+          onMobClick={handleMobClick}
         />
-        <button className="pause-button" onClick={() => setIsPaused(true)} disabled={isPaused} aria-label="Pause game">
-          II
-        </button>
         {isPaused ? (
           <div className="pause-menu">
             <p className="eyebrow">Run paused</p>
@@ -197,7 +233,50 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
             <span>x{killCombo}</span>
           </div>
         ) : null}
+        <div className="code-overlay">
+          <div className="code-overlay-heading">
+            <span>Code under investigation</span>
+            <b>PYTHON</b>
+          </div>
+          <CodeEditor
+            value={codeInput}
+            onChange={(event) => onCodeChange(event.target.value)}
+            aria-label="Code under investigation"
+            compact
+            editorRef={codeEditorRef}
+          />
+          <button onClick={handleCodeRun} disabled={loading}>
+            {loading ? 'Analyzing...' : 'Analyze code'}
+          </button>
+        </div>
       </div>
+
+      <div className="reference-deck">
+        <div className="deck-stat-group">
+          <button className="deck-pause" onClick={() => setIsPaused(true)} disabled={isPaused} aria-label="Pause game">II</button>
+          <span className="deck-stat coin-stat">COINS: {coins}</span>
+          <span className="deck-stat">COMBO: {combo}x</span>
+        </div>
+        <div className="command-feed">&gt;&gt; {currentQuiz ? currentQuiz.question : 'DUNGEON CLEARED'}</div>
+        <div className="deck-controls">
+          <span>Mode</span>
+          <button className="deck-mode active" onClick={() => onModeChange(true)}>Arcade</button>
+          <button className="deck-mode" onClick={() => onModeChange(false)}>Panic</button>
+          <button className={isLogOpen ? 'debug-log active' : 'debug-log'} onClick={() => setIsLogOpen((open) => !open)} aria-expanded={isLogOpen}>
+            Debug log
+          </button>
+        </div>
+      </div>
+
+      {isLogOpen ? (
+        <div className="debug-log-panel">
+          <div className="debug-log-title"><span>Debug terminal</span><button onClick={() => setIsLogOpen(false)} aria-label="Close debug log">×</button></div>
+          <p><span className="terminal-prompt">&gt;&gt;</span> session: {isComplete ? 'complete' : 'active'}</p>
+          <p><span className="terminal-prompt">&gt;&gt;</span> lesson: {currentQuiz ? `line ${currentQuiz.bug_line} | ${currentQuiz.topic || 'debugging lesson'}` : 'none'}</p>
+          <p><span className="terminal-prompt">&gt;&gt;</span> status: {feedback || 'waiting for a breakpoint or quiz answer'}</p>
+          {correctedArea ? <pre>{correctedArea}</pre> : null}
+        </div>
+      ) : null}
 
       {!isComplete && currentQuiz ? (
         <div className="quiz-card">
@@ -210,6 +289,12 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
           </div>
           <p>{currentQuiz.question}</p>
           <p className="quiz-hint">Focus: {currentQuiz.hint}</p>
+          {correctedArea ? (
+            <div className="corrected-area">
+              <span>Corrected area</span>
+              <pre>{correctedArea}</pre>
+            </div>
+          ) : null}
           {feedback ? (
             <p className={feedback.startsWith('Wrong') ? 'quiz-feedback wrong' : 'quiz-feedback'}>
               {feedback}
