@@ -52,6 +52,7 @@ class Quiz(BaseModel):
     question: str
     options: List[str]
     answer: int
+    hint: str = ""
 
 
 class RefactorResponse(BaseModel):
@@ -130,6 +131,76 @@ def _detect_bug_hotspots(tree):
                 break
 
     return hotspots
+
+
+def _build_relevant_quizzes(code: str, hotspots) -> List[dict]:
+    lines = code.splitlines()
+    quizzes = []
+    for line, reason in hotspots[:6]:
+        snippet = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+        if "++" in snippet:
+            question = f"Line {line} uses `{snippet}`. Which Python operator should add the item to the running total?"
+            options = [
+                "Use += so the running total is updated",
+                "Use ++ because Python treats it as increment",
+                "Use == to assign the new total",
+                "Remove the total and return the current item",
+            ]
+            hint = "Python has no increment operator; replace ++ with += for accumulation."
+        elif "except" in snippet:
+            question = f"How should you debug the exception handling on line {line}?"
+            options = [
+                "Catch the expected exception explicitly and inspect the error",
+                "Use a bare except so every problem disappears",
+                "Delete the try block without reproducing the failure",
+                "Ignore the exception because the output may still look right",
+            ]
+            hint = "Start with the narrowest exception type that matches the failure."
+        elif "/" in snippet:
+            question = f"What runtime case should you test for the operation on line {line}?"
+            options = [
+                "A zero denominator that could raise ZeroDivisionError",
+                "Only a larger numerator because division never fails",
+                "A renamed variable without running the code",
+                "An unrelated loop with no division in it",
+            ]
+            hint = "Trace the divisor with an input that makes it zero."
+        elif snippet.startswith("while"):
+            question = f"What should you verify before running the loop on line {line}?"
+            options = [
+                "That its state changes and a reachable exit condition exists",
+                "That the loop has no break or stopping condition",
+                "That every variable becomes global",
+                "That the loop runs forever for difficult inputs",
+            ]
+            hint = "Follow one iteration and check what changes before the next test."
+        elif snippet.startswith("def "):
+            question = f"How can you verify the function defined on line {line}?"
+            options = [
+                "Trace a representative input through its assumptions and return value",
+                "Rename the function before testing its behavior",
+                "Remove the return statement to avoid failures",
+                "Test only the function name without calling it",
+            ]
+            hint = "Use a small input with a known expected result."
+        else:
+            question = f"What is the best first debugging step for line {line}, `{snippet}`?"
+            options = [
+                "Reproduce the behavior and compare the actual value with the expected value",
+                "Change several unrelated lines at the same time",
+                "Skip reproduction and only reformat the code",
+                "Assume the line is correct because it parses",
+            ]
+            hint = reason
+
+        quizzes.append({
+            "bug_line": line,
+            "question": question,
+            "options": options,
+            "answer": 0,
+            "hint": hint,
+        })
+    return quizzes
 
 
 @app.post("/api/analyze")
@@ -246,21 +317,7 @@ def _fallback_refactor(code: str) -> dict:
             (repaired_line, "Use += for addition assignment; ++ is not a Python increment operator."),
         )
 
-    quizzes = []
-    for line, reason in hotspots[:6]:
-        quizzes.append(
-            {
-                "bug_line": line,
-                "question": f"What's the issue on line {line}?",
-                "options": [
-                    reason,
-                    "This line is completely fine as written.",
-                    "It's only a style nitpick, not a functional bug.",
-                    "It's a performance issue with no correctness impact.",
-                ],
-                "answer": 0,
-            }
-        )
+    quizzes = _build_relevant_quizzes(code, hotspots)
 
     clean_code = (
         "# --- CodeCrawl offline mode: no ANTHROPIC_API_KEY configured ---\n"

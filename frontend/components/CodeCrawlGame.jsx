@@ -3,13 +3,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import DungeonCanvas from './DungeonCanvas';
 
+const createMobHealth = (count) =>
+  Array.from({ length: count }, () => Math.floor(Math.random() * 3) + 1);
+
 export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setCoins, onQuit }) {
   const [quizIndex, setQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isComplete, setIsComplete] = useState(false);
   const [killedEnemies, setKilledEnemies] = useState([]);
   const [isKilling, setIsKilling] = useState(false);
-  const [enemyCount, setEnemyCount] = useState(Math.max(1, metrics?.bug_count || 1));
+  const [enemyCount, setEnemyCount] = useState(() => 5 + Math.floor(Math.random() * 2));
+  const [enemyHealth, setEnemyHealth] = useState([]);
+  const [dyingEnemies, setDyingEnemies] = useState([]);
+  const [killCombo, setKillCombo] = useState(0);
   const [combo, setCombo] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [isPaused, setIsPaused] = useState(false);
@@ -31,7 +37,11 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     setIsComplete(false);
     setKilledEnemies([]);
     setIsKilling(false);
-    setEnemyCount(Math.max(1, metrics?.bug_count || 1));
+    const mobCount = 5 + Math.floor(Math.random() * 2);
+    setEnemyCount(mobCount);
+    setEnemyHealth(createMobHealth(mobCount));
+    setDyingEnemies([]);
+    setKillCombo(0);
     setCombo(0);
     setFeedback('');
     setIsPaused(false);
@@ -45,7 +55,11 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     setIsComplete(false);
     setKilledEnemies([]);
     setIsKilling(false);
-    setEnemyCount(Math.max(1, metrics?.bug_count || 1));
+    const mobCount = 5 + Math.floor(Math.random() * 2);
+    setEnemyCount(mobCount);
+    setEnemyHealth(createMobHealth(mobCount));
+    setDyingEnemies([]);
+    setKillCombo(0);
     setCombo(0);
     setFeedback('');
     setCoins(0);
@@ -71,7 +85,8 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     if (!isCorrect) {
       setCombo(0);
       setEnemyCount((count) => count + 1);
-      setFeedback('Wrong path. A crawler multiplied. Try the lesson again.');
+      setEnemyHealth((health) => [...health, Math.floor(Math.random() * 3) + 1]);
+      setFeedback(`Wrong answer. Hint: ${currentQuiz.hint || `Inspect line ${currentQuiz.bug_line} and trace what it changes.`}`);
       setTimeout(() => setSelectedAnswer(null), 500);
       return;
     }
@@ -86,20 +101,54 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
     setAttackStartedAt(Date.now());
     setIsKilling(true);
 
+    const aliveEnemies = enemies
+      .map((enemy, index) => index)
+      .filter((index) => !killedEnemies.includes(index));
+    const quizzesRemaining = quizzes.length - quizIndex;
+    const strikeCount = quizzesRemaining === 1
+      ? aliveEnemies.length
+      : Math.max(1, Math.ceil(aliveEnemies.length / quizzesRemaining));
+    const targets = aliveEnemies.slice(0, strikeCount);
+    const deaths = targets.filter((index) => (enemyHealth[index] || 1) <= 1);
+    const deathTargets = quizzesRemaining === 1 ? aliveEnemies : deaths;
+    setDyingEnemies(deathTargets);
+    setKillCombo(deathTargets.length > 3 ? deathTargets.length : 0);
+    if (deathTargets.length > 3) {
+      setTimeout(() => setKillCombo(0), 3600);
+    }
+
     setTimeout(() => {
-      setKilledEnemies((previous) => [...new Set([...previous, quizIndex])]);
+      const remainingHealth = enemyHealth.map((value, index) => (
+        targets.includes(index) ? Math.max(0, value - 1) : value
+      ));
+      if (quizzesRemaining === 1) {
+        targets.push(...aliveEnemies.filter((index) => !targets.includes(index)));
+        deaths.push(...aliveEnemies.filter((index) => !deaths.includes(index)));
+      }
+      setEnemyHealth(remainingHealth);
+      setKilledEnemies((previous) => [...new Set([...previous, ...deathTargets])]);
 
       setTimeout(() => {
         const nextIndex = quizIndex + 1;
+        if (deathTargets.length < targets.length) {
+          setSelectedAnswer(null);
+          setIsKilling(false);
+          setDyingEnemies([]);
+          const woundedCount = targets.length - deaths.length;
+          setFeedback(`Hit landed on ${targets.length} mobs. ${woundedCount} need another strike.`);
+          return;
+        }
         if (nextIndex >= quizzes.length) {
           setIsComplete(true);
           setIsKilling(false);
+          setDyingEnemies([]);
           return;
         }
 
         setQuizIndex(nextIndex);
         setSelectedAnswer(null);
         setIsKilling(false);
+        setDyingEnemies([]);
         setFeedback('');
       }, 1100);
     }, 2300);
@@ -124,6 +173,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
         <DungeonCanvas
           enemies={enemies}
           killedEnemies={killedEnemies}
+          dyingEnemies={dyingEnemies}
           isKilling={isKilling}
           targetIndex={quizIndex}
           attackNonce={attackNonce}
@@ -139,6 +189,12 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setC
             <button onClick={() => setIsPaused(false)}>Resume</button>
             <button onClick={restartRun}>Restart run</button>
             <button className="quit-button" onClick={quitRun}>Quit to code</button>
+          </div>
+        ) : null}
+        {killCombo > 3 ? (
+          <div className="kill-combo" aria-live="polite">
+            <strong>COMBO!!</strong>
+            <span>x{killCombo}</span>
           </div>
         ) : null}
       </div>

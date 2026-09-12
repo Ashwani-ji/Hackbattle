@@ -379,8 +379,69 @@ function drawPixelKnight(context, x, groundY, attacking, charge, elapsed, weapon
   context.restore();
 }
 
+function drawDeathBurst(context, x, y, progress) {
+  if (progress < 0.08) return;
+  const burstProgress = Math.min(1, (progress - 0.08) / 0.62);
+  const pixels = [
+    [-24, -5, 8, 8], [-12, -22, 9, 12], [3, -28, 8, 10], [17, -14, 10, 9],
+    [-31, 10, 9, 9], [-17, 18, 12, 8], [8, 15, 11, 11], [25, 5, 9, 9],
+  ];
+  context.save();
+  context.globalAlpha = Math.max(0, 1 - burstProgress * 0.8);
+  for (const [offsetX, offsetY, width, height] of pixels) {
+    const distance = 1 + burstProgress * 1.5;
+    context.fillStyle = offsetY < 0 ? '#ffcf63' : '#e9573f';
+    context.fillRect(x + offsetX * distance, y + 48 + offsetY * distance, width, height);
+  }
+  context.fillStyle = '#fff0a0';
+  context.fillRect(x - 8, y + 33, 16, 17);
+  context.fillStyle = '#f57b45';
+  context.fillRect(x - 19, y + 28, 9, 13);
+  context.fillRect(x + 11, y + 31, 10, 12);
+  context.fillStyle = '#9b9b8c';
+  context.globalAlpha *= 0.85;
+  context.fillRect(x - 29 - burstProgress * 8, y + 1 - burstProgress * 12, 11, 10);
+  context.fillRect(x + 21 + burstProgress * 7, y - 3 - burstProgress * 15, 13, 11);
+  context.fillRect(x - 9, y - 15 - burstProgress * 18, 14, 9);
+  context.restore();
+}
+
+function drawCoinDrop(context, x, groundY, progress) {
+  if (progress < 0.62) return;
+  const dropProgress = Math.min(1, (progress - 0.62) / 0.38);
+  const coinY = groundY - 38 + dropProgress * 28;
+  context.save();
+  context.globalAlpha = Math.min(1, dropProgress * 4);
+  context.fillStyle = '#5d4026';
+  context.fillRect(x - 7, coinY - 6, 14, 14);
+  context.fillStyle = '#f7d45b';
+  context.fillRect(x - 6, coinY - 8, 12, 12);
+  context.fillStyle = '#fff0a0';
+  context.fillRect(x - 3, coinY - 6, 3, 7);
+  context.restore();
+}
+
+function drawSoul(context, x, y, progress) {
+  if (progress < 0.35) return;
+  const soulProgress = Math.min(1, (progress - 0.35) / 0.65);
+  const soulY = y + 48 - soulProgress * 58;
+  context.save();
+  context.globalAlpha = Math.max(0, 1 - soulProgress * 0.85);
+  context.fillStyle = '#d8fff0';
+  context.fillRect(x - 9, soulY - 8, 18, 19);
+  context.fillRect(x - 14, soulY - 2, 28, 9);
+  context.fillStyle = '#8ff4dc';
+  context.fillRect(x - 5, soulY - 13, 10, 6);
+  context.fillRect(x - 12, soulY + 7, 7, 7);
+  context.fillRect(x + 5, soulY + 7, 7, 7);
+  context.fillStyle = '#172c34';
+  context.fillRect(x - 5, soulY - 1, 3, 5);
+  context.fillRect(x + 3, soulY - 1, 3, 5);
+  context.restore();
+}
+
 function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed) {
-  const deathProgress = dying ? Math.min(1, Math.max(0, (elapsed - 2300) / 1100)) : 0;
+  const deathProgress = dying ? Math.min(1, Math.max(0, (elapsed - 1850) / 450)) : 0;
   if (defeated && !dying) return;
   const size = 64;
   const y = groundY - 94 - deathProgress * 20;
@@ -402,14 +463,6 @@ function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed
   context.shadowColor = 'transparent';
   context.shadowBlur = 0;
   context.shadowOffsetY = 0;
-  if (index === 0) {
-    context.strokeStyle = '#ffdd85';
-    context.lineWidth = 2;
-    context.beginPath();
-    context.strokeRect(x - 32, y - 4, 64, 86);
-    context.stroke();
-  }
-
   // Chunky pixel-art silhouette based on the supplied character reference.
   const isMage = index % 2 === 1;
   const face = '#ffe1a0';
@@ -454,6 +507,13 @@ function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed
   context.fillStyle = '#5b4033';
   context.fillRect(x - 18, y + 78, 12, 11);
   context.fillRect(x + 7, y + 78, 12, 11);
+  if (dying && elapsed >= 1850 && elapsed < 1970) {
+    context.globalCompositeOperation = 'source-atop';
+    context.fillStyle = '#ffffff';
+    context.fillRect(x - 34, y - 4, 68, 96);
+    context.globalCompositeOperation = 'source-over';
+  }
+  if (dying) drawDeathBurst(context, x, y, deathProgress);
   context.fillStyle = '#f9f4e8';
   context.font = '10px monospace';
   context.textAlign = 'center';
@@ -465,22 +525,13 @@ function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed
     context.fillRect(x - 20, y - 9, 40, 2);
   }
   if (dying) {
-    for (let particle = 0; particle < 7; particle += 1) {
-      const angle = particle * 0.9;
-      const distance = 12 + deathProgress * 26;
-      context.fillStyle = particle % 2 ? '#ffda7a' : '#ff7b83';
-      context.fillRect(
-        x + Math.cos(angle) * distance,
-        y + size / 2 + Math.sin(angle) * distance,
-        4,
-        4
-      );
-    }
+    drawCoinDrop(context, x, groundY, deathProgress);
+    drawSoul(context, x, y, deathProgress);
   }
   context.restore();
 }
 
-function drawScene(context, width, height, enemies, killedEnemies, attacking, targetIndex, elapsed, attackElapsed, weapon) {
+function drawScene(context, width, height, enemies, killedEnemies, dyingEnemies, attacking, targetIndex, elapsed, attackElapsed, weapon) {
   const groundY = height - 29;
   context.fillStyle = palette.floor;
   context.fillRect(0, 0, width, height);
@@ -600,8 +651,8 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
   context.textAlign = 'left';
   context.fillText('BUG DUNGEON', 38, 41);
 
-  const spacing = Math.max(112, Math.floor(width * 0.24));
-  const targetX = Math.min(width - 72, width * 0.72 + targetIndex * spacing);
+  const spacing = Math.max(62, Math.floor((width * 0.62) / Math.max(1, enemies.length - 1)));
+  const targetX = Math.min(width - 48, width * 0.3 + targetIndex * spacing);
   const charge = Math.min(1, attackElapsed / 3200);
   const runProgress = Math.min(1, Math.max(0, (attackElapsed - 250) / 2300));
   const easedRun = runProgress * runProgress * (3 - 2 * runProgress);
@@ -655,7 +706,7 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
   drawPixelKnight(context, width * 0.12, groundY, attacking, heroCharge, attackElapsed, weapon, charge);
 
   enemies.forEach((enemy, index) => {
-    const isDying = attacking && index === targetIndex;
+    const isDying = attacking && dyingEnemies.includes(index);
     drawCrawler(
       context,
       targetX + (index - targetIndex) * spacing - cameraPan,
@@ -678,11 +729,11 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
   context.fillRect(0, 0, width, height);
 }
 
-export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targetIndex, attackNonce, attackStartedAt }) {
+export default function DungeonCanvas({ enemies, killedEnemies, dyingEnemies, isKilling, targetIndex, attackNonce, attackStartedAt }) {
   const canvasRef = useRef(null);
-  const sceneRef = useRef({ enemies, killedEnemies, isKilling, targetIndex, attackNonce, attackStartedAt });
+  const sceneRef = useRef({ enemies, killedEnemies, dyingEnemies, isKilling, targetIndex, attackNonce, attackStartedAt });
   const attackRef = useRef({ nonce: 0, weapon: 'sword' });
-  sceneRef.current = { enemies, killedEnemies, isKilling, targetIndex, attackNonce, attackStartedAt };
+  sceneRef.current = { enemies, killedEnemies, dyingEnemies, isKilling, targetIndex, attackNonce, attackStartedAt };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -716,6 +767,7 @@ export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targe
         height,
         scene.enemies,
         scene.killedEnemies,
+        scene.dyingEnemies,
         scene.isKilling,
         scene.targetIndex,
         Date.now() - startedAt,

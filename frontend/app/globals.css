@@ -475,6 +475,39 @@ textarea {
   pointer-events: none;
 }
 
+
+.kill-combo {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  transform: translate(-50%, -50%) rotate(-4deg);
+  animation: combo-pop 3.6s ease-out both;
+  pointer-events: none;
+  text-align: center;
+  text-shadow: 3px 3px 0 #4c241f, 0 0 18px rgba(255, 219, 104, 0.85);
+}
+
+.kill-combo strong {
+  color: #ffe78b;
+  font: 900 clamp(1.5rem, 4vw, 2.8rem)/0.9 Impact, Haettenschweiler, "Arial Black", sans-serif;
+  letter-spacing: 0.06em;
+}
+
+.kill-combo span {
+  color: #fff5cb;
+  font: 900 clamp(1.1rem, 3vw, 2rem)/1 Impact, Haettenschweiler, "Arial Black", sans-serif;
+}
+
+@keyframes combo-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(0.45); }
+  16% { opacity: 1; transform: translate(-50%, -50%) rotate(-4deg) scale(1.18); }
+  28% { transform: translate(-50%, -50%) rotate(-4deg) scale(0.98); }
+  78% { opacity: 1; transform: translate(-50%, -64%) rotate(-4deg) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -76%) rotate(-4deg) scale(0.92); }
+}
 .pause-button {
   position: absolute;
   top: 12px;
