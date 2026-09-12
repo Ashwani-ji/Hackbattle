@@ -18,7 +18,7 @@ import sys
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -39,6 +39,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+party_rooms = {}
+
+
+async def broadcast_party(room_code: str, message: dict):
+    room = party_rooms.get(room_code)
+    if not room:
+        return
+    stale = []
+    for socket in room["members"]:
+        try:
+            await socket.send_json(message)
+        except Exception:
+            stale.append(socket)
+    for socket in stale:
+        room["members"].discard(socket)
 
 
 # ---------------------------------------------------------------------------
@@ -485,3 +501,43 @@ def debug_code(payload: CodeInput):
 @app.get("/")
 def root():
     return {"status": "CodeCrawl API is running", "docs": "/docs"}
+
+
+@app.websocket("/ws/party/{room_code}")
+async def party_socket(websocket: WebSocket, room_code: str):
+    await websocket.accept()
+    room_code = room_code.upper()[:8]
+    room = party_rooms.setdefault(room_code, {"members": set(), "players": {}, "leader": None, "answered": set(), "code": ""})
+    player_id = websocket.query_params.get("player", "player")[:32]
+    requested_leader = websocket.query_params.get("leader") == "true"
+    room["members"].add(websocket)
+    if room["leader"] is None or requested_leader:
+        room["leader"] = player_id
+    room["players"][player_id] = {"name": player_id, "exp": 0, "coins": 0}
+    await broadcast_party(room_code, {"type": "party_state", "leader": room["leader"], "players": room["players"], "code": room.get("code", "")})
+    try:
+        while True:
+            message = await websocket.receive_json()
+            message_type = message.get("type")
+            if message_type == "code" and player_id == room["leader"]:
+                room["code"] = message.get("code", "")
+                await broadcast_party(room_code, {"type": "party_state", "leader": room["leader"], "players": room["players"], "code": room["code"]})
+            elif message_type == "answer":
+                question_id = str(message.get("question", ""))
+                first_solver = question_id not in room["answered"]
+                room["answered"].add(question_id)
+                for player in room["players"].values():
+                    player["exp"] += 10
+                    player["coins"] += 1
+                room["players"][player_id]["exp"] += 20 if first_solver else 0
+                room["players"][player_id]["coins"] += 2 if first_solver else 0
+                await broadcast_party(room_code, {"type": "party_state", "leader": room["leader"], "players": room["players"], "code": room.get("code", ""), "firstSolver": player_id if first_solver else None})
+    except WebSocketDisconnect:
+        room["members"].discard(websocket)
+        room["players"].pop(player_id, None)
+        if room["leader"] == player_id:
+            room["leader"] = next(iter(room["players"]), None)
+        if room["members"]:
+            await broadcast_party(room_code, {"type": "party_state", "leader": room["leader"], "players": room["players"], "code": room.get("code", "")})
+        else:
+            party_rooms.pop(room_code, None)

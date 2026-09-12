@@ -7,7 +7,7 @@ import CodeEditor from './CodeEditor';
 const createMobHealth = (count) =>
   Array.from({ length: count }, () => Math.floor(Math.random() * 3) + 1);
 
-export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, onCodeChange, onAnalyze, loading, onModeChange, coins, setCoins, onQuit }) {
+export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, onCodeChange, onAnalyze, loading, onModeChange, coins, setCoins, onQuit, onPartyAnswer }) {
   const [quizIndex, setQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isComplete, setIsComplete] = useState(false);
@@ -106,6 +106,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, 
     }
 
     revealCorrectedArea(currentQuiz);
+    onPartyAnswer?.(currentQuiz.question);
     const nextCombo = combo + 1;
     setCombo(nextCombo);
     const coinRoll = Math.random();
@@ -207,32 +208,34 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, 
         </div>
       </div>
 
-      <div className="game-canvas">
-        <DungeonCanvas
-          enemies={enemies}
-          killedEnemies={killedEnemies}
-          dyingEnemies={dyingEnemies}
-          isKilling={isKilling}
-          targetIndex={quizIndex}
-          attackNonce={attackNonce}
-          attackStartedAt={attackStartedAt}
-          onMobClick={handleMobClick}
-        />
-        {isPaused ? (
-          <div className="pause-menu">
-            <p className="eyebrow">Run paused</p>
-            <h3>Dungeon menu</h3>
-            <button onClick={() => setIsPaused(false)}>Resume</button>
-            <button onClick={restartRun}>Restart run</button>
-            <button className="quit-button" onClick={quitRun}>Quit to code</button>
-          </div>
-        ) : null}
-        {killCombo > 3 ? (
-          <div className="kill-combo" aria-live="polite">
-            <strong>COMBO!!</strong>
-            <span>x{killCombo}</span>
-          </div>
-        ) : null}
+      <div className="game-main-grid">
+        <div className="game-canvas">
+          <DungeonCanvas
+            enemies={enemies}
+            killedEnemies={killedEnemies}
+            dyingEnemies={dyingEnemies}
+            isKilling={isKilling}
+            targetIndex={quizIndex}
+            attackNonce={attackNonce}
+            attackStartedAt={attackStartedAt}
+            onMobClick={handleMobClick}
+          />
+          {isPaused ? (
+            <div className="pause-menu">
+              <p className="eyebrow">Run paused</p>
+              <h3>Dungeon menu</h3>
+              <button onClick={() => setIsPaused(false)}>Resume</button>
+              <button onClick={restartRun}>Restart run</button>
+              <button className="quit-button" onClick={quitRun}>Quit to code</button>
+            </div>
+          ) : null}
+          {killCombo > 3 ? (
+            <div className="kill-combo" aria-live="polite">
+              <strong>COMBO!!</strong>
+              <span>x{killCombo}</span>
+            </div>
+          ) : null}
+        </div>
         <div className="code-overlay">
           <div className="code-overlay-heading">
             <span>Code under investigation</span>
@@ -257,7 +260,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, 
           <span className="deck-stat coin-stat">COINS: {coins}</span>
           <span className="deck-stat">COMBO: {combo}x</span>
         </div>
-        <div className="command-feed">&gt;&gt; {currentQuiz ? currentQuiz.question : 'DUNGEON CLEARED'}</div>
+        <div className="command-feed">&gt;&gt; {currentQuiz ? `Lesson ${quizIndex + 1} ready` : 'DUNGEON CLEARED'}</div>
         <div className="deck-controls">
           <span>Mode</span>
           <button className="deck-mode active" onClick={() => onModeChange(true)}>Arcade</button>

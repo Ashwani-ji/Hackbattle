@@ -765,7 +765,7 @@ export default function DungeonCanvas({ enemies, killedEnemies, dyingEnemies, is
 
     const render = (now) => {
       const width = parent.clientWidth;
-      const height = window.innerWidth <= 560 ? 260 : 280;
+      const height = window.innerWidth <= 560 ? 260 : 320;
       const ratio = window.devicePixelRatio || 1;
       canvas.width = width * ratio;
       canvas.height = height * ratio;

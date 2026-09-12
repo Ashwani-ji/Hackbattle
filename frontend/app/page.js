@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CodeCrawlGame from '../components/CodeCrawlGame';
 import CodeEditor from '../components/CodeEditor';
 
@@ -14,6 +14,7 @@ const starterCode = `def find_total(items):
 
 export default function HomePage() {
   const [isArcadeMode, setIsArcadeMode] = useState(true);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [codeInput, setCodeInput] = useState(starterCode);
   const [panicResult, setPanicResult] = useState(null);
   const [debugResult, setDebugResult] = useState(null);
@@ -21,6 +22,82 @@ export default function HomePage() {
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [playerName, setPlayerName] = useState('Player');
+  const [playerStats, setPlayerStats] = useState({ exp: 0, coins: 0 });
+  const [roomInput, setRoomInput] = useState('');
+  const [roomCode, setRoomCode] = useState('');
+  const [partyState, setPartyState] = useState(null);
+  const partySocket = useRef(null);
+  const isPartyLeader = partyState?.leader === playerName;
+  const currentPlayerStats = partyState?.players?.[playerName]
+    ? { exp: partyState.players[playerName].exp, coins: partyState.players[playerName].coins }
+    : { exp: playerStats.exp, coins };
+  const leaderboardEntries = partyState
+    ? Object.entries(partyState.players || {}).sort(([, left], [, right]) => right.exp - left.exp)
+    : [[playerName, { name: playerName || 'Player', exp: currentPlayerStats.exp, coins: currentPlayerStats.coins }]];
+
+  useEffect(() => () => partySocket.current?.close(), []);
+
+  const handleNavMode = (mode) => {
+    if (mode === 'leaderboard') {
+      setShowLeaderboard(true);
+      setIsArcadeMode(true);
+      return;
+    }
+
+    setShowLeaderboard(false);
+    setIsArcadeMode(mode === 'arcade');
+  };
+
+  const connectParty = (code, leader = false) => {
+    partySocket.current?.close();
+    const host = window.location.hostname || 'localhost';
+    const socket = new WebSocket(`ws://${host}:8000/ws/party/${code}?player=${encodeURIComponent(playerName || 'Player')}&leader=${leader}`);
+    socket.onopen = () => {
+      setRoomCode(code);
+      setMessage(`Party ${code} connected.`);
+      socket.send(JSON.stringify({ type: 'code', code: codeInput }));
+    };
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'party_state') {
+        setPartyState(data);
+        const currentPlayer = data.players?.[playerName];
+        if (currentPlayer) {
+          setPlayerStats({ exp: currentPlayer.exp || 0, coins: currentPlayer.coins || 0 });
+        }
+        if (data.code && data.leader !== playerName) {
+          setCodeInput(data.code);
+        }
+      }
+      if (data.type === 'code' && data.leader !== playerName) {
+        setCodeInput(data.code);
+      }
+    };
+    socket.onerror = () => setMessage('Party connection failed. Use the computer IP on the same Wi-Fi.');
+    socket.onclose = () => setPartyState(null);
+    partySocket.current = socket;
+  };
+
+  const createParty = () => connectParty(Math.random().toString(36).slice(2, 8).toUpperCase(), true);
+  const joinParty = () => roomInput.trim() && connectParty(roomInput.trim().toUpperCase());
+  const leaveParty = () => {
+    partySocket.current?.close();
+    partySocket.current = null;
+    setRoomCode('');
+    setPartyState(null);
+    setRoomInput('');
+    setMessage('');
+  };
+  const updateSharedCode = (code) => {
+    setCodeInput(code);
+    if (isPartyLeader && partySocket.current?.readyState === WebSocket.OPEN) {
+      partySocket.current.send(JSON.stringify({ type: 'code', code }));
+    }
+  };
+  const sendPartyAnswer = (question) => {
+    if (partySocket.current?.readyState === WebSocket.OPEN) partySocket.current.send(JSON.stringify({ type: 'answer', question }));
+  };
 
   const importPythonFiles = async (event) => {
     const files = Array.from(event.target.files || []).filter((file) => file.name.toLowerCase().endsWith('.py'));
@@ -129,10 +206,13 @@ export default function HomePage() {
         </div>
         <div className="brand-sigil" aria-hidden="true">✣</div>
         <nav className="quick-nav" aria-label="Mode navigation">
-          <button className={isArcadeMode ? 'quick-nav-button active' : 'quick-nav-button'} onClick={() => setIsArcadeMode(true)} title="Arcade mode">
+          <button className={isArcadeMode && !showLeaderboard ? 'quick-nav-button active' : 'quick-nav-button'} onClick={() => handleNavMode('arcade')} title="Arcade mode">
             ⚔ <span>Arcade</span>
           </button>
-          <button className={!isArcadeMode ? 'quick-nav-button active danger' : 'quick-nav-button danger'} onClick={() => setIsArcadeMode(false)} title="Panic mode">
+          <button className={showLeaderboard ? 'quick-nav-button active leaderboard' : 'quick-nav-button leaderboard'} onClick={() => handleNavMode('leaderboard')} title="Leaderboard view">
+            🏆 <span>Leaderboard</span>
+          </button>
+          <button className={!isArcadeMode && !showLeaderboard ? 'quick-nav-button active danger' : 'quick-nav-button danger'} onClick={() => handleNavMode('panic')} title="Panic mode">
             ⚠ <span>Panic</span>
           </button>
         </nav>
@@ -140,7 +220,29 @@ export default function HomePage() {
 
       {message ? <div className="status-banner">{message}</div> : null}
 
-      {!isArcadeMode ? (
+      {showLeaderboard ? (
+        <section className="panel leaderboard-view-panel">
+          <div className="leaderboard-header">
+            <div>
+              <span className="eyebrow">Leaderboard</span>
+              <strong>{partyState ? `${Object.keys(partyState.players || {}).length} connected` : 'Local progress'}</strong>
+            </div>
+            <span className="leaderboard-tag">{partyState ? (partyState.leader === playerName ? 'Leader' : 'Follower') : 'Solo'}</span>
+          </div>
+
+          <div className="leaderboard-list">
+            {leaderboardEntries.map(([id, player], index) => (
+              <div key={id} className={`leaderboard-item ${partyState?.leader === id ? 'leader' : ''}`}>
+                <span className="leaderboard-rank">#{index + 1}</span>
+                <div className="leaderboard-player">
+                  <strong>{player.name}</strong>
+                  <small>{player.exp} XP · {player.coins} coins</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : !isArcadeMode ? (
         <section className="panel panic-panel">
           <div className="debug-toolbar">
             <span className="debug-label">Python debugger</span>
@@ -166,7 +268,7 @@ export default function HomePage() {
           </div>
           <CodeEditor
             value={codeInput}
-            onChange={(event) => setCodeInput(event.target.value)}
+            onChange={(event) => updateSharedCode(event.target.value)}
             placeholder="Paste broken Python code here"
             ariaLabel="Paste broken Python code here"
           />
@@ -205,6 +307,55 @@ export default function HomePage() {
         </section>
       ) : (
         <section className="panel arcade-panel">
+          <section className="party-bar">
+            <div className="party-heading">
+              <div>
+                <span className="eyebrow">LAN party</span>
+                <strong>{roomCode ? `Room ${roomCode}` : 'Play together over Wi-Fi'}</strong>
+              </div>
+              {roomCode ? <span className="party-role">{isPartyLeader ? 'Leader · shared code source' : 'Following leader'}</span> : null}
+            </div>
+
+            <div className="party-controls">
+              <label className="party-field">
+                <span>Player</span>
+                <input value={playerName} onChange={(event) => setPlayerName(event.target.value)} placeholder="Your name" aria-label="Your player name" />
+              </label>
+
+              {!roomCode ? (
+                <>
+                  <label className="party-field party-field-compact">
+                    <span>Room code</span>
+                    <input value={roomInput} onChange={(event) => setRoomInput(event.target.value)} placeholder="Enter code" aria-label="Room code" />
+                  </label>
+                  <button className="party-button primary" onClick={createParty}>Create party</button>
+                  <button className="party-button secondary" onClick={joinParty}>Join</button>
+                </>
+              ) : (
+                <button className="party-button tertiary" onClick={leaveParty}>Leave room</button>
+              )}
+            </div>
+          </section>
+
+          {!partyState ? (
+            <section className="player-summary-panel">
+              <div className="player-summary-header">
+                <span className="eyebrow">Profile</span>
+                <strong>{playerName || 'Player'}</strong>
+              </div>
+              <div className="player-summary-stats">
+                <div className="summary-stat">
+                  <span>EXP</span>
+                  <strong>{currentPlayerStats.exp}</strong>
+                </div>
+                <div className="summary-stat">
+                  <span>Coins</span>
+                  <strong>{currentPlayerStats.coins}</strong>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <div className="reference-stage">
             {arcadeResult ? (
               <section className="game-workspace reference-game">
@@ -216,10 +367,11 @@ export default function HomePage() {
                   quizzes={arcadeResult.quizzes || []}
                   cleanCode={arcadeResult.clean_code || ''}
                   codeInput={codeInput}
-                  onCodeChange={setCodeInput}
+                  onCodeChange={updateSharedCode}
                   onAnalyze={handleLaunch}
                   loading={loading}
                   onModeChange={setIsArcadeMode}
+                  onPartyAnswer={sendPartyAnswer}
                   coins={coins}
                   setCoins={setCoins}
                   onQuit={handleQuitArcade}
@@ -252,6 +404,28 @@ export default function HomePage() {
               </section>
             )}
           </div>
+          {partyState ? (
+            <section className="leaderboard-panel">
+              <div className="leaderboard-header">
+                <div>
+                  <span className="eyebrow">Party leaderboard</span>
+                  <strong>{Object.keys(partyState.players || {}).length} connected</strong>
+                </div>
+                <span className="leaderboard-tag">{partyState.leader === playerName ? 'Leader' : 'Follower'}</span>
+              </div>
+              <div className="leaderboard-list">
+                {Object.entries(partyState.players || {}).sort(([, left], [, right]) => right.exp - left.exp).map(([id, player], index) => (
+                  <div key={id} className={`leaderboard-item ${partyState.leader === id ? 'leader' : ''}`}>
+                    <span className="leaderboard-rank">#{index + 1}</span>
+                    <div className="leaderboard-player">
+                      <strong>{player.name}</strong>
+                      <small>{player.exp} XP · {player.coins} coins</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </section>
       )}
     </main>
