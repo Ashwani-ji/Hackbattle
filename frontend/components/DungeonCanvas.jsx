@@ -382,14 +382,14 @@ function drawPixelKnight(context, x, groundY, attacking, charge, elapsed, weapon
 function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed) {
   const deathProgress = dying ? Math.min(1, Math.max(0, (elapsed - 2300) / 1100)) : 0;
   if (defeated && !dying) return;
-  const size = index % 4 === 3 ? 38 : 32;
-  const y = groundY - size - 14 - deathProgress * 20;
+  const size = 64;
+  const y = groundY - 94 - deathProgress * 20;
   context.save();
   if (dying) {
-    context.translate(x, y + size / 2);
+    context.translate(x, y + 42);
     context.rotate(deathProgress * Math.PI * 1.8);
     context.scale(1 - deathProgress * 0.45, 1 - deathProgress * 0.45);
-    context.translate(-x, -(y + size / 2));
+    context.translate(-x, -(y + 42));
     context.globalAlpha = 1 - deathProgress;
   }
   context.shadowColor = 'rgba(0, 0, 0, 0.5)';
@@ -397,7 +397,7 @@ function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed
   context.shadowOffsetY = 6;
   context.fillStyle = 'rgba(0, 0, 0, 0.45)';
   context.beginPath();
-  context.ellipse(x, groundY - 5, size * 0.7, 7, 0, 0, Math.PI * 2);
+  context.ellipse(x, groundY - 4, 30, 6, 0, 0, Math.PI * 2);
   context.fill();
   context.shadowColor = 'transparent';
   context.shadowBlur = 0;
@@ -406,39 +406,58 @@ function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed
     context.strokeStyle = '#ffdd85';
     context.lineWidth = 2;
     context.beginPath();
-    context.arc(x, y + size / 2, size / 2 + 8, 0, Math.PI * 2);
+    context.strokeRect(x - 32, y - 4, 64, 86);
     context.stroke();
   }
-  const colors = ['#f36b73', '#a77bea', '#72c98d', '#bd805c'];
-  const highlights = ['#ffb4ae', '#d3b8ff', '#c0f1be', '#edba8b'];
-  const gradient = context.createRadialGradient(x - 6, y + 5, 2, x, y + size / 2, size);
-  gradient.addColorStop(0, highlights[index % highlights.length]);
-  gradient.addColorStop(1, colors[index % colors.length]);
-  context.fillStyle = gradient;
-  context.beginPath();
-  if (index % 4 === 1) {
-    context.arc(x, y + size / 2, size / 2, 0, Math.PI * 2);
-  } else if (index % 4 === 2) {
-    context.moveTo(x, y);
-    context.lineTo(x + size / 2, y + size);
-    context.lineTo(x - size / 2, y + size);
-    context.closePath();
-  } else {
-    roundedRect(context, x - size / 2, y, size, size, 9);
-  }
-  context.fill();
-  context.fillStyle = '#161421';
-  context.beginPath();
-  context.arc(x - 7, y + 12, 4, 0, Math.PI * 2);
-  context.arc(x + 7, y + 12, 4, 0, Math.PI * 2);
-  context.fill();
-  context.fillStyle = '#fff2cc';
-  context.fillRect(x - 6, y + 11, 2, 2);
-  context.fillRect(x + 8, y + 11, 2, 2);
+
+  // Chunky pixel-art silhouette based on the supplied character reference.
+  const isMage = index % 2 === 1;
+  const face = '#ffe1a0';
+  const faceLight = '#fff0be';
+  const hair = isMage ? '#4b2819' : '#ad8458';
+  const hairDark = isMage ? '#2c1713' : '#795538';
+  const robe = isMage ? '#7d5b42' : '#9b7148';
+  const accent = isMage ? '#a96bd0' : '#36b86b';
+
+  context.fillStyle = hairDark;
+  context.fillRect(x - 25, y + 9, 50, 47);
+  context.fillRect(x - 18, y + 2, 37, 8);
+  context.fillRect(x - 29, y + 18, 8, 31);
+  context.fillRect(x + 21, y + 18, 8, 36);
+  context.fillStyle = hair;
+  context.fillRect(x - 21, y + 5, 42, 44);
+  context.fillRect(x - 15, y - 1, 31, 7);
+  context.fillRect(x - 25, y + 16, 8, 30);
+  context.fillRect(x + 17, y + 12, 10, 39);
+
+  context.fillStyle = face;
+  context.fillRect(x - 17, y + 11, 34, 37);
+  context.fillRect(x - 12, y + 7, 25, 42);
+  context.fillStyle = faceLight;
+  context.fillRect(x - 12, y + 12, 25, 29);
+  context.fillStyle = '#080a0a';
+  context.fillRect(x - 9, y + 16, 6, 19);
+  context.fillRect(x + 5, y + 16, 6, 19);
+  context.fillRect(x - 2, y + 40, 7, 4);
+
+  context.fillStyle = robe;
+  context.fillRect(x - 20, y + 48, 40, 30);
+  context.fillRect(x - 27, y + 55, 54, 17);
+  context.fillStyle = hairDark;
+  context.fillRect(x - 28, y + 72, 56, 8);
+  context.fillStyle = accent;
+  context.fillRect(x - 21, y + 49, 11, 9);
+  context.fillRect(x + 12, y + 49, 10, 9);
+  context.fillStyle = face;
+  context.fillRect(x - 34, y + 55, 12, 18);
+  context.fillRect(x + 22, y + 55, 12, 18);
+  context.fillStyle = '#5b4033';
+  context.fillRect(x - 18, y + 78, 12, 11);
+  context.fillRect(x + 7, y + 78, 12, 11);
   context.fillStyle = '#f9f4e8';
   context.font = '10px monospace';
   context.textAlign = 'center';
-  context.fillText(enemy.name, x, y + size + 13);
+  context.fillText(enemy.name, x, y + 104);
   if (index === 0) {
     context.fillStyle = '#171b20';
     context.fillRect(x - 22, y - 11, 44, 5);

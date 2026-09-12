@@ -15,6 +15,7 @@ export default function HomePage() {
   const [isArcadeMode, setIsArcadeMode] = useState(true);
   const [codeInput, setCodeInput] = useState(starterCode);
   const [panicResult, setPanicResult] = useState(null);
+  const [debugResult, setDebugResult] = useState(null);
   const [arcadeResult, setArcadeResult] = useState(null);
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -74,6 +75,25 @@ export default function HomePage() {
     await runRefactor();
   };
 
+  const handleDebug = async () => {
+    setLoading(true);
+    setDebugResult(null);
+    setMessage('');
+    try {
+      const response = await fetch('http://localhost:8000/api/debug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: codeInput }),
+      });
+      const data = await response.json();
+      setDebugResult(data);
+    } catch (error) {
+      setMessage('Debugger is unavailable. Start the API service first.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLaunch = async () => {
     await runArcade();
   };
@@ -111,6 +131,12 @@ export default function HomePage() {
 
       {!isArcadeMode ? (
         <section className="panel panic-panel">
+          <div className="debug-toolbar">
+            <span className="debug-label">Python debugger</span>
+            <button className="debug-run-button" onClick={handleDebug} disabled={loading}>
+              {loading ? 'Running...' : 'Run file'}
+            </button>
+          </div>
           <textarea
             value={codeInput}
             onChange={(event) => setCodeInput(event.target.value)}
@@ -122,6 +148,16 @@ export default function HomePage() {
               {loading ? 'Fixing...' : 'Execute Emergency Fix'}
             </button>
           </div>
+
+          {debugResult ? (
+            <div className={`debug-console ${debugResult.status}`}>
+              <div className="debug-console-heading">
+                <strong>Console</strong>
+                <span>{debugResult.status.replace('_', ' ')} · exit {debugResult.exit_code}</span>
+              </div>
+              <pre>{[debugResult.stdout, debugResult.stderr].filter(Boolean).join('\n')}</pre>
+            </div>
+          ) : null}
 
           {panicResult ? (
             <div className="result-card">
@@ -164,27 +200,21 @@ export default function HomePage() {
               </div>
             </section>
 
-            <section className="game-workspace">
-              {arcadeResult ? (
-            <CodeCrawlGame
-              metrics={{
-                complexity_score: arcadeResult.complexity_score,
-                bug_count: arcadeResult.bug_count,
-              }}
-              quizzes={arcadeResult.quizzes || []}
-              cleanCode={arcadeResult.clean_code || ''}
-              coins={coins}
-              setCoins={setCoins}
-              onQuit={handleQuitArcade}
-            />
-              ) : (
-                <div className="game-placeholder">
-                  <p className="eyebrow">Learning dungeon</p>
-                  <h2>Submit code to reveal its debugging lessons.</h2>
-                  <p>Each quiz will point to a real structure found in this file.</p>
-                </div>
-              )}
-            </section>
+            {arcadeResult ? (
+              <section className="game-workspace">
+                <CodeCrawlGame
+                  metrics={{
+                    complexity_score: arcadeResult.complexity_score,
+                    bug_count: arcadeResult.bug_count,
+                  }}
+                  quizzes={arcadeResult.quizzes || []}
+                  cleanCode={arcadeResult.clean_code || ''}
+                  coins={coins}
+                  setCoins={setCoins}
+                  onQuit={handleQuitArcade}
+                />
+              </section>
+            ) : null}
           </div>
         </section>
       )}

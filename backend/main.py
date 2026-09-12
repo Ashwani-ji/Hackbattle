@@ -13,6 +13,8 @@ import ast
 import json
 import os
 import re
+import subprocess
+import sys
 from typing import List, Optional
 
 from dotenv import load_dotenv
@@ -55,6 +57,13 @@ class Quiz(BaseModel):
 class RefactorResponse(BaseModel):
     clean_code: str
     quizzes: List[Quiz]
+
+
+class DebugResponse(BaseModel):
+    status: str
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -211,11 +220,31 @@ def _call_anthropic(code: str) -> Optional[dict]:
 def _fallback_refactor(code: str) -> dict:
     """Offline mode: no API key configured, or the LLM call failed/timed out.
     Produces a deterministic result so the app is always fully demoable."""
+    repaired_code = re.sub(
+        r"^(\s*)([A-Za-z_]\w*)\s*\+\+\s*(.+?)\s*$",
+        r"\1\2 += \3",
+        code,
+        flags=re.MULTILINE,
+    )
+
     try:
         tree = ast.parse(code)
         hotspots = _detect_bug_hotspots(tree)
     except SyntaxError:
         hotspots = [(1, "Fix the syntax error before continuing.")]
+
+    if repaired_code != code:
+        repaired_line = next(
+            index
+            for index, (before, after) in enumerate(
+                zip(code.splitlines(), repaired_code.splitlines()), start=1
+            )
+            if before != after
+        )
+        hotspots.insert(
+            0,
+            (repaired_line, "Use += for addition assignment; ++ is not a Python increment operator."),
+        )
 
     quizzes = []
     for line, reason in hotspots[:6]:
@@ -235,7 +264,7 @@ def _fallback_refactor(code: str) -> dict:
 
     clean_code = (
         "# --- CodeCrawl offline mode: no ANTHROPIC_API_KEY configured ---\n"
-        "# Add your key to backend/.env for real AI-generated refactors.\n\n" + code
+        "# Add your key to backend/.env for real AI-generated refactors.\n\n" + repaired_code
     )
 
     return {"clean_code": clean_code, "quizzes": quizzes}
@@ -259,6 +288,41 @@ def refactor_code(payload: CodeInput):
             pass
 
     return _fallback_refactor(payload.code)
+
+
+@app.post("/api/debug", response_model=DebugResponse)
+def debug_code(payload: CodeInput):
+    """Run one local debugging session and return the captured console state."""
+    try:
+        compile(payload.code, "<CodeCrawl debugger>", "exec")
+    except SyntaxError as error:
+        return DebugResponse(
+            status="syntax_error",
+            stderr=f"SyntaxError: {error.msg} (line {error.lineno})",
+            exit_code=1,
+        )
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-I", "-c", payload.code],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except subprocess.TimeoutExpired as error:
+        return DebugResponse(
+            status="timeout",
+            stdout=error.stdout or "",
+            stderr="Execution stopped after 5 seconds.",
+            exit_code=124,
+        )
+
+    return DebugResponse(
+        status="passed" if completed.returncode == 0 else "runtime_error",
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        exit_code=completed.returncode,
+    )
 
 
 @app.get("/")
