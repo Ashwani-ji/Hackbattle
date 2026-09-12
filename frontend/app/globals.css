@@ -258,6 +258,11 @@ pre {
   box-shadow: 0 0 18px rgba(133, 242, 157, 0.35);
 }
 
+.stats .coin-stat {
+  color: #f5d44f;
+  border-color: rgba(245, 212, 79, 0.3);
+}
+
 .game-canvas {
   position: relative;
   height: 300px;
@@ -273,6 +278,65 @@ pre {
     inset 0 0 0 6px #1c252d,
     0 10px 0 #080d12,
     0 16px 26px rgba(0, 0, 0, 0.42);
+}
+
+.pause-button {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  width: 38px;
+  height: 34px;
+  padding: 0;
+  border: 2px solid #c69a68;
+  border-radius: 5px;
+  background: rgba(55, 42, 35, 0.94);
+  color: #f5dfbb;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.pause-button:disabled {
+  opacity: 0.45;
+}
+
+.pause-menu {
+  position: absolute;
+  z-index: 6;
+  inset: 50% auto auto 50%;
+  width: min(260px, calc(100% - 36px));
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border: 3px solid #c69a68;
+  border-radius: 8px;
+  background: rgba(31, 23, 23, 0.97);
+  box-shadow: 0 14px 0 rgba(0, 0, 0, 0.32), 0 0 0 5px rgba(11, 17, 23, 0.8);
+  text-align: center;
+}
+
+.pause-menu h3 {
+  margin: 0 0 6px;
+  color: #f5dfbb;
+}
+
+.pause-menu button {
+  border: 2px solid #b98a5c;
+  border-radius: 5px;
+  background: #4d6470;
+  color: #f8f4df;
+  padding: 10px;
+  font-weight: 800;
+}
+
+.pause-menu button:hover {
+  background: #657e87;
+}
+
+.pause-menu .quit-button {
+  background: #7f3541;
+  border-color: #d48779;
 }
 
 .dungeon-canvas {

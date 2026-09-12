@@ -16,6 +16,7 @@ export default function HomePage() {
   const [codeInput, setCodeInput] = useState(starterCode);
   const [panicResult, setPanicResult] = useState(null);
   const [arcadeResult, setArcadeResult] = useState(null);
+  const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -75,6 +76,12 @@ export default function HomePage() {
 
   const handleLaunch = async () => {
     await runArcade();
+  };
+
+  const handleQuitArcade = () => {
+    setArcadeResult(null);
+    setCodeInput('');
+    setCoins(0);
   };
 
   return (
@@ -166,6 +173,9 @@ export default function HomePage() {
               }}
               quizzes={arcadeResult.quizzes || []}
               cleanCode={arcadeResult.clean_code || ''}
+              coins={coins}
+              setCoins={setCoins}
+              onQuit={handleQuitArcade}
             />
               ) : (
                 <div className="game-placeholder">

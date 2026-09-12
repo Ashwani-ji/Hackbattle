@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import DungeonCanvas from './DungeonCanvas';
 
-export default function CodeCrawlGame({ metrics, quizzes, cleanCode }) {
+export default function CodeCrawlGame({ metrics, quizzes, cleanCode, coins, setCoins, onQuit }) {
   const [quizIndex, setQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isComplete, setIsComplete] = useState(false);
@@ -12,6 +12,9 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode }) {
   const [enemyCount, setEnemyCount] = useState(Math.max(1, metrics?.bug_count || 1));
   const [combo, setCombo] = useState(0);
   const [feedback, setFeedback] = useState('');
+  const [isPaused, setIsPaused] = useState(false);
+  const [attackNonce, setAttackNonce] = useState(0);
+  const [attackStartedAt, setAttackStartedAt] = useState(0);
 
   const enemies = useMemo(
     () => Array.from({ length: enemyCount }, (_, index) => ({
@@ -31,10 +34,32 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode }) {
     setEnemyCount(Math.max(1, metrics?.bug_count || 1));
     setCombo(0);
     setFeedback('');
-  }, [metrics, quizzes]);
+    setIsPaused(false);
+    setAttackNonce(0);
+    setAttackStartedAt(0);
+  }, [metrics?.bug_count, metrics?.complexity_score, quizzes]);
+
+  const restartRun = () => {
+    setQuizIndex(0);
+    setSelectedAnswer(null);
+    setIsComplete(false);
+    setKilledEnemies([]);
+    setIsKilling(false);
+    setEnemyCount(Math.max(1, metrics?.bug_count || 1));
+    setCombo(0);
+    setFeedback('');
+    setCoins(0);
+    setAttackStartedAt(0);
+    setIsPaused(false);
+  };
+
+  const quitRun = () => {
+    setIsPaused(false);
+    onQuit();
+  };
 
   const handleAnswer = (answerIndex) => {
-    if (isKilling) return;
+    if (isKilling || isPaused) return;
     setSelectedAnswer(answerIndex);
     const currentQuiz = quizzes[quizIndex];
     if (!currentQuiz) {
@@ -53,7 +78,12 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode }) {
 
     const nextCombo = combo + 1;
     setCombo(nextCombo);
-    setFeedback(nextCombo > 1 ? `${nextCombo}x debugging combo!` : 'Correct. Crawler exposed.');
+    const coinRoll = Math.random();
+    const reward = coinRoll < 0.45 ? 1 : coinRoll < 0.72 ? 2 : coinRoll < 0.88 ? 3 : coinRoll < 0.97 ? 4 : 5;
+    setCoins((total) => total + reward);
+    setFeedback(nextCombo > 1 ? `${nextCombo}x combo! +${reward} coin${reward === 1 ? '' : 's'}` : `Correct. +${reward} coin${reward === 1 ? '' : 's'}`);
+    setAttackNonce((nonce) => nonce + 1);
+    setAttackStartedAt(Date.now());
     setIsKilling(true);
 
     setTimeout(() => {
@@ -71,8 +101,8 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode }) {
         setSelectedAnswer(null);
         setIsKilling(false);
         setFeedback('');
-      }, 420);
-    }, 380);
+      }, 1100);
+    }, 2300);
   };
 
   const currentQuiz = quizzes[quizIndex];
@@ -85,8 +115,7 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode }) {
           <h2>Bug dungeon</h2>
         </div>
         <div className="stats">
-          <span>complexity {metrics?.complexity_score ?? 0}</span>
-          <span>bugs {enemies.length}</span>
+          <span className="coin-stat">coins {coins}</span>
           <span className={combo > 1 ? 'combo-stat active' : 'combo-stat'}>combo {combo}x</span>
         </div>
       </div>
@@ -97,7 +126,21 @@ export default function CodeCrawlGame({ metrics, quizzes, cleanCode }) {
           killedEnemies={killedEnemies}
           isKilling={isKilling}
           targetIndex={quizIndex}
+          attackNonce={attackNonce}
+          attackStartedAt={attackStartedAt}
         />
+        <button className="pause-button" onClick={() => setIsPaused(true)} disabled={isPaused} aria-label="Pause game">
+          II
+        </button>
+        {isPaused ? (
+          <div className="pause-menu">
+            <p className="eyebrow">Run paused</p>
+            <h3>Dungeon menu</h3>
+            <button onClick={() => setIsPaused(false)}>Resume</button>
+            <button onClick={restartRun}>Restart run</button>
+            <button className="quit-button" onClick={quitRun}>Quit to code</button>
+          </div>
+        ) : null}
       </div>
 
       {!isComplete && currentQuiz ? (

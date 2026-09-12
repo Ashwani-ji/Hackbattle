@@ -103,7 +103,169 @@ function drawChest(context, x, y) {
   context.fillRect(x - 15, y + 12, 30, 5);
 }
 
-function drawPixelKnight(context, x, groundY, attacking, charge, elapsed) {
+function drawReferenceCorridor(context, width, height, elapsed, offset = 0) {
+  context.save();
+  context.translate(offset, 0);
+  const floorY = height - 64;
+  const wallGradient = context.createLinearGradient(0, 0, 0, floorY);
+  wallGradient.addColorStop(0, '#202b32');
+  wallGradient.addColorStop(1, '#46504d');
+  context.fillStyle = wallGradient;
+  context.fillRect(0, 0, width, floorY);
+
+  for (let row = 0; row < 8; row += 1) {
+    for (let column = -1; column < width / 38 + 1; column += 1) {
+      const x = column * 38 + (row % 2) * 19;
+      const y = row * 25;
+      const shade = (row + column) % 3 === 0 ? '#59615b' : '#424b4b';
+      context.fillStyle = shade;
+      context.fillRect(x + 1, y + 1, 35, 21);
+      context.fillStyle = '#263238';
+      context.fillRect(x, y + 21, 38, 4);
+      context.fillStyle = 'rgba(190, 205, 181, 0.08)';
+      context.fillRect(x + 4, y + 4, 19, 3);
+    }
+  }
+
+  const archX = width / 2;
+  context.fillStyle = '#12191f';
+  context.beginPath();
+  context.moveTo(archX - 86, floorY);
+  context.lineTo(archX - 86, 91);
+  context.arc(archX, 91, 86, Math.PI, 0);
+  context.lineTo(archX + 86, floorY);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = '#69736f';
+  context.lineWidth = 9;
+  context.stroke();
+  context.strokeStyle = '#252f34';
+  context.lineWidth = 5;
+  context.stroke();
+
+  context.fillStyle = '#060a0d';
+  context.beginPath();
+  context.moveTo(archX - 61, floorY);
+  context.lineTo(archX - 61, 95);
+  context.arc(archX, 95, 61, Math.PI, 0);
+  context.lineTo(archX + 61, floorY);
+  context.closePath();
+  context.fill();
+
+  for (const x of [26, width - 31]) {
+    context.fillStyle = '#20292d';
+    context.fillRect(x, 30, 7, floorY - 24);
+    context.fillStyle = '#8f987e';
+    context.fillRect(x + 8, 39, 4, floorY - 35);
+    context.fillStyle = '#547044';
+    for (let leaf = 0; leaf < 6; leaf += 1) {
+      context.fillRect(x + 12 + (leaf % 2) * 8, 48 + leaf * 27, 9, 13);
+    }
+  }
+
+  const torchPulse = 0.75 + Math.sin(elapsed / 190) * 0.15;
+  for (const x of [width * 0.13, width * 0.87]) {
+    drawGlow(context, x, 137, 52, `rgba(255, 196, 92, ${torchPulse * 0.22})`);
+    context.fillStyle = '#a16c42';
+    context.fillRect(x - 4, 134, 8, 22);
+    context.fillStyle = '#ffe18b';
+    context.beginPath();
+    context.moveTo(x, 119);
+    context.lineTo(x + 8, 143);
+    context.lineTo(x - 8, 143);
+    context.closePath();
+    context.fill();
+  }
+
+  const floorGradient = context.createLinearGradient(0, floorY, 0, height);
+  floorGradient.addColorStop(0, '#7f806a');
+  floorGradient.addColorStop(1, '#303b3b');
+  context.fillStyle = floorGradient;
+  context.fillRect(0, floorY, width, height - floorY);
+  context.strokeStyle = 'rgba(21, 28, 30, 0.5)';
+  context.lineWidth = 2;
+  for (let x = -height; x < width + height; x += 34) {
+    context.beginPath();
+    context.moveTo(x, floorY);
+    context.lineTo(x + height, height);
+    context.stroke();
+  }
+  for (let y = floorY + 17; y < height; y += 17) {
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(width, y);
+    context.stroke();
+  }
+  context.restore();
+}
+
+function drawRoomMarker(context, x, y, variant) {
+  context.fillStyle = '#172229';
+  context.fillRect(x - 18, y - 30, 36, 42);
+  context.fillStyle = variant % 2 ? '#566b70' : '#76563d';
+  context.fillRect(x - 13, y - 25, 26, 31);
+  context.fillStyle = variant % 2 ? '#a7c1bf' : '#c18b45';
+  context.fillRect(x - 8, y - 19, 16, 5);
+  context.fillStyle = '#202b31';
+  context.fillRect(x - 16, y + 6, 32, 6);
+}
+
+function drawHud(context, width, elapsed) {
+  context.save();
+  context.fillStyle = 'rgba(31, 23, 23, 0.94)';
+  context.fillRect(12, 10, 174, 58);
+  context.fillStyle = '#b98a5c';
+  context.fillRect(12, 10, 174, 4);
+  context.fillRect(12, 64, 174, 4);
+  context.strokeStyle = '#e0b77a';
+  context.lineWidth = 2;
+  context.strokeRect(14, 12, 170, 54);
+
+  context.fillStyle = '#ec3b55';
+  context.beginPath();
+  context.arc(29, 27, 6, 0, Math.PI * 2);
+  context.arc(38, 27, 6, 0, Math.PI * 2);
+  context.lineTo(33.5, 40);
+  context.closePath();
+  context.fill();
+  context.fillStyle = '#f8f4df';
+  context.font = 'bold 12px monospace';
+  context.textAlign = 'left';
+  context.fillText('9 / 11', 51, 31);
+
+  context.fillStyle = '#d6c6a1';
+  context.fillRect(28, 42, 14, 8);
+  context.fillStyle = '#5b92c7';
+  context.fillRect(51, 43, 109, 7);
+  context.fillStyle = '#55d5da';
+  context.fillRect(51, 43, 78, 7);
+  context.fillStyle = '#f8f4df';
+  context.fillText('6 / 6', 51, 60);
+
+  context.fillStyle = '#f5d44f';
+  context.beginPath();
+  context.arc(width - 82, 25, 7, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = '#fff6bd';
+  context.font = 'bold 14px monospace';
+  context.fillText('5', width - 68, 30);
+  context.fillStyle = 'rgba(55, 42, 35, 0.95)';
+  context.fillRect(width - 54, 10, 40, 38);
+  context.strokeStyle = '#c69a68';
+  context.strokeRect(width - 54, 10, 40, 38);
+  context.fillStyle = '#f5dfbb';
+  context.fillRect(width - 43, 18, 4, 20);
+  context.fillRect(width - 33, 18, 4, 20);
+
+  context.globalAlpha = 0.8;
+  context.fillStyle = '#d8e1df';
+  context.font = '10px monospace';
+  context.fillText('WAVE 01', width - 92, 62);
+  context.globalAlpha = 1;
+  context.restore();
+}
+
+function drawPixelKnight(context, x, groundY, attacking, charge, elapsed, weapon, attackProgress) {
   const heroX = x + (attacking ? charge : 0);
   const y = groundY - 105;
   const bob = attacking ? Math.sin(elapsed / 55) * 2 : Math.sin(elapsed / 300) * 2;
@@ -178,23 +340,47 @@ function drawPixelKnight(context, x, groundY, attacking, charge, elapsed) {
   context.fillStyle = palette.gold;
   context.fillRect(heroX - 25, stanceY + 97 - run * 3, 17, 6);
 
-  if (attacking) {
+  if (attacking && weapon === 'gun') {
+    context.save();
+    context.translate(heroX + 43, stanceY + 57);
+    context.fillStyle = '#202830';
+    context.fillRect(0, -6, 28, 12);
+    context.fillStyle = '#aebfc2';
+    context.fillRect(7, -9, 13, 4);
+    context.fillStyle = '#d79b4a';
+    context.fillRect(-7, 2, 11, 10);
+    context.fillStyle = '#ffe96a';
+    context.shadowColor = '#ffe96a';
+    context.shadowBlur = 18;
+    context.beginPath();
+    context.arc(32, 0, 7 + Math.sin(elapsed / 35) * 2, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  } else if (attacking) {
     context.save();
     context.translate(heroX + 45, stanceY + 55);
-    context.rotate(-0.35 + Math.min(1, charge / 100));
+    const slash = Math.sin(attackProgress * Math.PI * 2);
+    context.rotate(-0.7 + slash * 1.2);
     context.fillStyle = '#f2faf7';
-    context.fillRect(0, 0, 62, 7);
+    context.fillRect(0, 0, 70, 7);
     context.fillStyle = '#52646b';
-    context.fillRect(0, 7, 62, 3);
+    context.fillRect(0, 7, 70, 3);
     context.fillStyle = palette.gold;
     context.fillRect(-8, -4, 9, 19);
+    if (charge > 0.48 && charge < 0.82) {
+      context.strokeStyle = 'rgba(255, 244, 151, 0.8)';
+      context.lineWidth = 4;
+      context.beginPath();
+      context.arc(22, 3, 47, -0.7, 0.45);
+      context.stroke();
+    }
     context.restore();
   }
   context.restore();
 }
 
 function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed) {
-  const deathProgress = dying ? Math.min(1, Math.max(0, (elapsed - 350) / 420)) : 0;
+  const deathProgress = dying ? Math.min(1, Math.max(0, (elapsed - 2300) / 1100)) : 0;
   if (defeated && !dying) return;
   const size = index % 4 === 3 ? 38 : 32;
   const y = groundY - size - 14 - deathProgress * 20;
@@ -275,7 +461,7 @@ function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed
   context.restore();
 }
 
-function drawScene(context, width, height, enemies, killedEnemies, attacking, targetIndex, elapsed, attackElapsed) {
+function drawScene(context, width, height, enemies, killedEnemies, attacking, targetIndex, elapsed, attackElapsed, weapon) {
   const groundY = height - 29;
   context.fillStyle = palette.floor;
   context.fillRect(0, 0, width, height);
@@ -292,9 +478,9 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
   }
 
   const sideWall = Math.max(92, Math.floor(width * 0.14));
-  context.fillStyle = palette.wallDark;
-  context.fillRect(0, 0, width, 82);
-  context.fillRect(0, 0, 21, height);
+    context.fillStyle = palette.wall;
+    context.fillRect(0, 0, width, 82);
+    context.fillRect(0, 0, 21, height);
   context.fillRect(width - 21, 0, 21, height);
   context.fillStyle = palette.wall;
   for (let y = 5; y < 82; y += 17) {
@@ -377,6 +563,12 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
     context.fillRect(x - 2, 106 - flicker, 4, 9);
   }
 
+  const scrollPreview = attacking ? Math.min(1, attackElapsed / 380) * 80 : 0;
+  for (let marker = 0; marker < 5; marker += 1) {
+    const markerX = ((marker * 190 + 60 - scrollPreview) % (width + 70)) - 35;
+    drawRoomMarker(context, markerX, 215 + (marker % 2) * 18, marker);
+  }
+
   drawGlow(context, width / 2, 50, 70, 'rgba(74, 218, 205, 0.08)');
   for (let index = 0; index < 8; index += 1) {
     drawSpark(context, width / 2 + (index - 4) * 20, 92 + (index % 3) * 22, elapsed, index);
@@ -389,16 +581,65 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
   context.textAlign = 'left';
   context.fillText('BUG DUNGEON', 38, 41);
 
-  const targetX = 23 + (targetIndex + 1) * 0.18 * (width - 46);
-  const charge = Math.min(1, attackElapsed / 380);
-  const heroCharge = attacking ? (targetX - width * 0.12) * Math.min(1, charge * 1.2) : 0;
-  drawPixelKnight(context, width * 0.12, groundY, attacking, heroCharge, attackElapsed);
+  const spacing = Math.max(112, Math.floor(width * 0.24));
+  const targetX = Math.min(width - 72, width * 0.72 + targetIndex * spacing);
+  const charge = Math.min(1, attackElapsed / 3200);
+  const runProgress = Math.min(1, Math.max(0, (attackElapsed - 250) / 2300));
+  const easedRun = runProgress * runProgress * (3 - 2 * runProgress);
+  const cameraPan = attacking ? Math.min(150, easedRun * 150) : 0;
+  const sceneryShift = attacking ? -cameraPan * 0.45 : 0;
+  drawReferenceCorridor(context, width, height, elapsed, sceneryShift);
+  drawReferenceCorridor(context, width, height, elapsed, sceneryShift + width);
+
+  if (attacking && runProgress < 1) {
+    context.save();
+    context.globalAlpha = 0.85;
+    context.fillStyle = '#f3e4b0';
+    context.font = 'bold 14px monospace';
+    context.textAlign = 'center';
+    context.fillText('CHARGE!', width * 0.5, 58);
+    context.restore();
+  }
+  const heroCharge = attacking ? (targetX - width * 0.12) * easedRun : 0;
+  if (attacking && charge < 0.72) {
+    context.save();
+    context.globalAlpha = 0.28;
+    context.strokeStyle = '#d7f4e8';
+    context.lineWidth = 4;
+    for (let streak = 0; streak < 4; streak += 1) {
+      const streakX = width * 0.12 + heroCharge - streak * 18;
+      context.beginPath();
+      context.moveTo(streakX, groundY - 38 - streak * 7);
+      context.lineTo(streakX - 28, groundY - 38 - streak * 7);
+      context.stroke();
+    }
+    context.fillStyle = '#c4d98d';
+    context.globalAlpha = 0.65;
+    for (let dust = 0; dust < 5; dust += 1) {
+      context.fillRect(width * 0.12 + heroCharge - dust * 13, groundY - 8 - (dust % 2) * 5, 5, 5);
+    }
+    context.restore();
+  }
+  if (attacking && runProgress >= 0.88) {
+    context.save();
+    context.globalAlpha = 1 - Math.min(1, (runProgress - 0.88) * 8);
+    context.strokeStyle = '#ffe96a';
+    context.lineWidth = 5;
+    context.shadowColor = '#fff09a';
+    context.shadowBlur = 18;
+    context.beginPath();
+    context.moveTo(targetX - cameraPan - 28, groundY - 74);
+    context.lineTo(targetX - cameraPan + 34, groundY - 116);
+    context.stroke();
+    context.restore();
+  }
+  drawPixelKnight(context, width * 0.12, groundY, attacking, heroCharge, attackElapsed, weapon, charge);
 
   enemies.forEach((enemy, index) => {
     const isDying = attacking && index === targetIndex;
     drawCrawler(
       context,
-      targetX + (index - targetIndex) * 42,
+      targetX + (index - targetIndex) * spacing - cameraPan,
       groundY,
       enemy,
       index,
@@ -418,18 +659,18 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
   context.fillRect(0, 0, width, height);
 }
 
-export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targetIndex }) {
+export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targetIndex, attackNonce, attackStartedAt }) {
   const canvasRef = useRef(null);
-  const sceneRef = useRef({ enemies, killedEnemies, isKilling, targetIndex });
-  const attackRef = useRef({ active: false, startedAt: 0 });
-  sceneRef.current = { enemies, killedEnemies, isKilling, targetIndex };
+  const sceneRef = useRef({ enemies, killedEnemies, isKilling, targetIndex, attackNonce, attackStartedAt });
+  const attackRef = useRef({ nonce: 0, weapon: 'sword' });
+  sceneRef.current = { enemies, killedEnemies, isKilling, targetIndex, attackNonce, attackStartedAt };
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const parent = canvas.parentElement;
     const context = canvas.getContext('2d');
     let frame;
-    const startedAt = performance.now();
+    const startedAt = Date.now();
 
     const render = (now) => {
       const width = parent.clientWidth;
@@ -441,12 +682,15 @@ export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targe
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.imageSmoothingEnabled = false;
       const scene = sceneRef.current;
-      if (scene.isKilling && !attackRef.current.active) {
-        attackRef.current = { active: true, startedAt: now };
-      } else if (!scene.isKilling) {
-        attackRef.current.active = false;
+      if (scene.isKilling && scene.attackNonce !== attackRef.current.nonce) {
+        attackRef.current = {
+          nonce: scene.attackNonce,
+          weapon: Math.random() < 0.22 ? 'gun' : 'sword',
+        };
       }
-      const attackElapsed = attackRef.current.active ? now - attackRef.current.startedAt : 0;
+      const attackElapsed = scene.isKilling && scene.attackStartedAt
+        ? Math.max(0, Date.now() - scene.attackStartedAt)
+        : 0;
       drawScene(
         context,
         width,
@@ -455,8 +699,9 @@ export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targe
         scene.killedEnemies,
         scene.isKilling,
         scene.targetIndex,
-        now - startedAt,
-        attackElapsed
+        Date.now() - startedAt,
+        attackElapsed,
+        attackRef.current.weapon
       );
       frame = requestAnimationFrame(render);
     };
