@@ -103,9 +103,12 @@ function drawChest(context, x, y) {
   context.fillRect(x - 15, y + 12, 30, 5);
 }
 
-function drawPixelKnight(context, x, groundY, attacking, charge) {
+function drawPixelKnight(context, x, groundY, attacking, charge, elapsed) {
   const heroX = x + (attacking ? charge : 0);
   const y = groundY - 105;
+  const bob = attacking ? Math.sin(elapsed / 55) * 2 : Math.sin(elapsed / 300) * 2;
+  const run = attacking ? Math.sin(elapsed / 70) : 0;
+  const stanceY = y + bob;
 
   context.save();
   context.shadowColor = 'rgba(0, 0, 0, 0.6)';
@@ -113,7 +116,7 @@ function drawPixelKnight(context, x, groundY, attacking, charge) {
   context.shadowOffsetY = 8;
   context.fillStyle = 'rgba(0, 0, 0, 0.45)';
   context.beginPath();
-  context.ellipse(heroX + 23, groundY - 4, 37, 8, 0, 0, Math.PI * 2);
+  context.ellipse(heroX + 23, groundY - 4, 37 + Math.abs(run) * 2, 8, 0, 0, Math.PI * 2);
   context.fill();
   context.shadowColor = 'transparent';
   context.shadowBlur = 0;
@@ -121,10 +124,10 @@ function drawPixelKnight(context, x, groundY, attacking, charge) {
 
   context.fillStyle = palette.redDark;
   context.beginPath();
-  context.moveTo(heroX - 8, y + 36);
-  context.lineTo(heroX + 25, y + 42);
-  context.lineTo(heroX + 24, y + 104);
-  context.lineTo(heroX - 3, y + 96);
+  context.moveTo(heroX - 8, stanceY + 36);
+  context.lineTo(heroX + 25, stanceY + 42);
+  context.lineTo(heroX + 24, stanceY + 104);
+  context.lineTo(heroX - 3, stanceY + 96);
   context.closePath();
   context.fill();
   const armor = context.createLinearGradient(heroX + 16, y + 35, heroX + 52, y + 96);
@@ -132,53 +135,53 @@ function drawPixelKnight(context, x, groundY, attacking, charge) {
   armor.addColorStop(0.28, '#62737d');
   armor.addColorStop(1, '#202c36');
   context.fillStyle = armor;
-  roundedRect(context, heroX + 16, y + 36, 38, 62, 7);
+  roundedRect(context, heroX + 16, stanceY + 36, 38, 62, 7);
   context.fill();
   context.fillStyle = '#171f27';
-  roundedRect(context, heroX + 20, y + 65, 31, 31, 5);
+  roundedRect(context, heroX + 20, stanceY + 65, 31, 31, 5);
   context.fill();
   context.fillStyle = '#171f27';
   context.fillStyle = '#76543a';
-  context.fillRect(heroX + 21, y + 93, 11, 15);
-  context.fillRect(heroX + 39, y + 93, 11, 15);
+  context.fillRect(heroX + 21, stanceY + 93 + run * 3, 11, 15);
+  context.fillRect(heroX + 39, stanceY + 93 - run * 3, 11, 15);
 
   const helmet = context.createLinearGradient(heroX + 10, y, heroX + 58, y + 40);
   helmet.addColorStop(0, '#d8e5e5');
   helmet.addColorStop(0.3, '#72858d');
   helmet.addColorStop(1, '#202d37');
   context.fillStyle = helmet;
-  roundedRect(context, heroX + 11, y + 3, 45, 39, 6);
+  roundedRect(context, heroX + 11, stanceY + 3, 45, 39, 6);
   context.fill();
   context.fillStyle = '#131c24';
-  context.fillRect(heroX + 19, y + 23, 37, 8);
-  context.fillRect(heroX + 48, y + 22, 11, 17);
+  context.fillRect(heroX + 19, stanceY + 23, 37, 8);
+  context.fillRect(heroX + 48, stanceY + 22, 11, 17);
   context.fillStyle = '#e1454b';
   context.beginPath();
-  context.moveTo(heroX + 13, y + 3);
-  context.lineTo(heroX + 22, y - 10);
-  context.lineTo(heroX + 48, y - 10);
-  context.lineTo(heroX + 42, y + 4);
+  context.moveTo(heroX + 13, stanceY + 3);
+  context.lineTo(heroX + 22, stanceY - 10);
+  context.lineTo(heroX + 48, stanceY - 10);
+  context.lineTo(heroX + 42, stanceY + 4);
   context.closePath();
   context.fill();
   context.fillStyle = palette.redDark;
-  context.fillRect(heroX + 10, y + 1, 36, 4);
+  context.fillRect(heroX + 10, stanceY + 1, 36, 4);
 
   context.fillStyle = palette.steel;
-  context.fillRect(heroX - 10, y + 48, 17, 37);
+  context.fillRect(heroX - 10, stanceY + 48 + run * 3, 17, 37);
   context.fillStyle = palette.steelDark;
-  context.fillRect(heroX - 13, y + 52, 6, 28);
+  context.fillRect(heroX - 13, stanceY + 52 + run * 3, 6, 28);
 
   context.fillStyle = '#e9f4f1';
-  context.fillRect(heroX - 22, y + 43, 6, 63);
+  context.fillRect(heroX - 22, stanceY + 43 - run * 3, 6, 63);
   context.fillStyle = '#52646b';
-  context.fillRect(heroX - 16, y + 43, 5, 63);
+  context.fillRect(heroX - 16, stanceY + 43 - run * 3, 5, 63);
   context.fillStyle = palette.gold;
-  context.fillRect(heroX - 25, y + 97, 17, 6);
+  context.fillRect(heroX - 25, stanceY + 97 - run * 3, 17, 6);
 
   if (attacking) {
     context.save();
-    context.translate(heroX + 45, y + 55);
-    context.rotate(-0.35 + charge / 100);
+    context.translate(heroX + 45, stanceY + 55);
+    context.rotate(-0.35 + Math.min(1, charge / 100));
     context.fillStyle = '#f2faf7';
     context.fillRect(0, 0, 62, 7);
     context.fillStyle = '#52646b';
@@ -190,11 +193,19 @@ function drawPixelKnight(context, x, groundY, attacking, charge) {
   context.restore();
 }
 
-function drawCrawler(context, x, groundY, enemy, index, defeated) {
-  if (defeated) return;
+function drawCrawler(context, x, groundY, enemy, index, defeated, dying, elapsed) {
+  const deathProgress = dying ? Math.min(1, Math.max(0, (elapsed - 350) / 420)) : 0;
+  if (defeated && !dying) return;
   const size = index % 4 === 3 ? 38 : 32;
-  const y = groundY - size - 14;
+  const y = groundY - size - 14 - deathProgress * 20;
   context.save();
+  if (dying) {
+    context.translate(x, y + size / 2);
+    context.rotate(deathProgress * Math.PI * 1.8);
+    context.scale(1 - deathProgress * 0.45, 1 - deathProgress * 0.45);
+    context.translate(-x, -(y + size / 2));
+    context.globalAlpha = 1 - deathProgress;
+  }
   context.shadowColor = 'rgba(0, 0, 0, 0.5)';
   context.shadowBlur = 8;
   context.shadowOffsetY = 6;
@@ -248,10 +259,23 @@ function drawCrawler(context, x, groundY, enemy, index, defeated) {
     context.fillStyle = palette.bug;
     context.fillRect(x - 20, y - 9, 40, 2);
   }
+  if (dying) {
+    for (let particle = 0; particle < 7; particle += 1) {
+      const angle = particle * 0.9;
+      const distance = 12 + deathProgress * 26;
+      context.fillStyle = particle % 2 ? '#ffda7a' : '#ff7b83';
+      context.fillRect(
+        x + Math.cos(angle) * distance,
+        y + size / 2 + Math.sin(angle) * distance,
+        4,
+        4
+      );
+    }
+  }
   context.restore();
 }
 
-function drawScene(context, width, height, enemies, killedEnemies, attacking, targetIndex, elapsed) {
+function drawScene(context, width, height, enemies, killedEnemies, attacking, targetIndex, elapsed, attackElapsed) {
   const groundY = height - 29;
   context.fillStyle = palette.floor;
   context.fillRect(0, 0, width, height);
@@ -366,12 +390,22 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
   context.fillText('BUG DUNGEON', 38, 41);
 
   const targetX = 23 + (targetIndex + 1) * 0.18 * (width - 46);
-  const charge = Math.min(1, elapsed / 380);
+  const charge = Math.min(1, attackElapsed / 380);
   const heroCharge = attacking ? (targetX - width * 0.12) * Math.min(1, charge * 1.2) : 0;
-  drawPixelKnight(context, width * 0.12, groundY, attacking, heroCharge);
+  drawPixelKnight(context, width * 0.12, groundY, attacking, heroCharge, attackElapsed);
 
   enemies.forEach((enemy, index) => {
-    drawCrawler(context, targetX + (index - targetIndex) * 42, groundY, enemy, index, killedEnemies.includes(index));
+    const isDying = attacking && index === targetIndex;
+    drawCrawler(
+      context,
+      targetX + (index - targetIndex) * 42,
+      groundY,
+      enemy,
+      index,
+      killedEnemies.includes(index),
+      isDying,
+      attackElapsed
+    );
   });
 
   context.fillStyle = palette.wallDark;
@@ -387,6 +421,7 @@ function drawScene(context, width, height, enemies, killedEnemies, attacking, ta
 export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targetIndex }) {
   const canvasRef = useRef(null);
   const sceneRef = useRef({ enemies, killedEnemies, isKilling, targetIndex });
+  const attackRef = useRef({ active: false, startedAt: 0 });
   sceneRef.current = { enemies, killedEnemies, isKilling, targetIndex };
 
   useEffect(() => {
@@ -406,6 +441,12 @@ export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targe
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.imageSmoothingEnabled = false;
       const scene = sceneRef.current;
+      if (scene.isKilling && !attackRef.current.active) {
+        attackRef.current = { active: true, startedAt: now };
+      } else if (!scene.isKilling) {
+        attackRef.current.active = false;
+      }
+      const attackElapsed = attackRef.current.active ? now - attackRef.current.startedAt : 0;
       drawScene(
         context,
         width,
@@ -414,7 +455,8 @@ export default function DungeonCanvas({ enemies, killedEnemies, isKilling, targe
         scene.killedEnemies,
         scene.isKilling,
         scene.targetIndex,
-        now - startedAt
+        now - startedAt,
+        attackElapsed
       );
       frame = requestAnimationFrame(render);
     };
