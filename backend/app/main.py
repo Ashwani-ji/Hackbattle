@@ -3,11 +3,14 @@ from __future__ import annotations
 import ast
 from typing import Any, Dict, List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(title="CodeCrawl API")
+
+# Rooms live in memory because LAN party play is intended for a single local host.
+party_rooms: Dict[str, Dict[str, Any]] = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +23,27 @@ app.add_middleware(
 
 class CodePayload(BaseModel):
     code: str
+
+
+def party_snapshot(room: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "type": "party_state",
+        "leader": room["leader"],
+        "code": room["code"],
+        "players": room["players"],
+    }
+
+
+async def broadcast_party_state(room: Dict[str, Any]) -> None:
+    message = party_snapshot(room)
+    disconnected = []
+    for connection in list(room["connections"]):
+        try:
+            await connection.send_json(message)
+        except RuntimeError:
+            disconnected.append(connection)
+    for connection in disconnected:
+        room["connections"].pop(connection, None)
 
 
 def analyze_python_code(code: str) -> Dict[str, Any]:
@@ -139,6 +163,59 @@ def build_quizzes(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 @app.get("/health")
 def health_check() -> Dict[str, str]:
     return {"status": "healthy"}
+
+
+@app.websocket("/ws/party/{room_code}")
+async def party_socket(
+    websocket: WebSocket,
+    room_code: str,
+    player: str = Query("Player"),
+    leader: bool = Query(False),
+) -> None:
+    """Synchronize a party's shared code and score board over the local network."""
+    await websocket.accept()
+    room_id = room_code.strip().upper()
+    player_id = player.strip() or "Player"
+    room = party_rooms.get(room_id)
+    if room is None:
+        room = {
+            "leader": player_id,
+            "code": "",
+            "players": {},
+            "connections": {},
+        }
+        party_rooms[room_id] = room
+
+    room["players"].setdefault(player_id, {"name": player_id, "exp": 0, "coins": 0})
+    room["connections"][websocket] = player_id
+    await broadcast_party_state(room)
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            message_type = message.get("type")
+            if message_type == "code" and player_id == room["leader"]:
+                room["code"] = str(message.get("code", ""))
+            elif message_type == "answer":
+                # The browser only submits this event after a correct answer.
+                stats = room["players"][player_id]
+                stats["exp"] += 10
+                stats["coins"] += 1
+            else:
+                continue
+            await broadcast_party_state(room)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        room["connections"].pop(websocket, None)
+        if player_id not in room["connections"].values():
+            room["players"].pop(player_id, None)
+        if not room["players"]:
+            party_rooms.pop(room_id, None)
+            return
+        if room["leader"] == player_id and player_id not in room["players"]:
+            room["leader"] = next(iter(room["players"]))
+        await broadcast_party_state(room)
 
 
 @app.post("/api/analyze")

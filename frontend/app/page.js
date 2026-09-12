@@ -12,6 +12,17 @@ const starterCode = `def find_total(items):
     return total
 `;
 
+const getApiBaseUrl = () => {
+  const host = window.location.hostname || 'localhost';
+  return `http://${host}:8000`;
+};
+
+const getPartySocketUrl = (roomCode, player, leader) => {
+  const host = window.location.hostname || 'localhost';
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${protocol}://${host}:8000/ws/party/${roomCode}?player=${encodeURIComponent(player || 'Player')}&leader=${leader}`;
+};
+
 export default function HomePage() {
   const [isArcadeMode, setIsArcadeMode] = useState(true);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -51,8 +62,7 @@ export default function HomePage() {
 
   const connectParty = (code, leader = false) => {
     partySocket.current?.close();
-    const host = window.location.hostname || 'localhost';
-    const socket = new WebSocket(`ws://${host}:8000/ws/party/${code}?player=${encodeURIComponent(playerName || 'Player')}&leader=${leader}`);
+    const socket = new WebSocket(getPartySocketUrl(code, playerName, leader));
     socket.onopen = () => {
       setRoomCode(code);
       setMessage(`Party ${code} connected.`);
@@ -117,7 +127,7 @@ export default function HomePage() {
     setLoading(true);
     setMessage('');
     try {
-      const response = await fetch('http://localhost:8000/api/refactor', {
+      const response = await fetch(`${getApiBaseUrl()}/api/refactor`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeInput }),
@@ -137,14 +147,14 @@ export default function HomePage() {
     setLoading(true);
     setMessage('');
     try {
-      const analyzeResponse = await fetch('http://localhost:8000/api/analyze', {
+      const analyzeResponse = await fetch(`${getApiBaseUrl()}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeInput }),
       });
       const analyzeData = await analyzeResponse.json();
 
-      const refactorResponse = await fetch('http://localhost:8000/api/refactor', {
+      const refactorResponse = await fetch(`${getApiBaseUrl()}/api/refactor`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeInput }),
@@ -173,7 +183,7 @@ export default function HomePage() {
     setDebugResult(null);
     setMessage('');
     try {
-      const response = await fetch('http://localhost:8000/api/debug', {
+      const response = await fetch(`${getApiBaseUrl()}/api/debug`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeInput }),
