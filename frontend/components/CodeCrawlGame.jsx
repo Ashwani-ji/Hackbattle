@@ -7,11 +7,22 @@ import CodeEditor from './CodeEditor';
 const createMobHealth = (count) =>
   Array.from({ length: count }, () => Math.floor(Math.random() * 3) + 1);
 
-<<<<<<< HEAD
-export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, onCodeChange, onAnalyze, loading, onModeChange, coins, setCoins, onQuit, onPartyAnswer }) {
-=======
-export default function CodeCrawlGame({ metrics, quizzes, cleanCode, codeInput, onCodeChange, onAnalyze, loading, onModeChange, coins, setCoins, onQuit, onMultiplayerProgress, submissionsLocked = false }) {
->>>>>>> 0554f81 (Update CodeCrawl frontend and multiplayer app)
+export default function CodeCrawlGame({
+  metrics,
+  quizzes,
+  cleanCode,
+  codeInput,
+  onCodeChange,
+  onAnalyze,
+  loading,
+  onModeChange,
+  coins,
+  setCoins,
+  onQuit,
+  onMultiplayerProgress,
+  onPartyAnswer,
+  submissionsLocked = false,
+}) {
   const [quizIndex, setQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isComplete, setIsComplete] = useState(false);
